@@ -106,7 +106,13 @@ final class DownloadCenter: ObservableObject {
     }
 
     private init() {
+        #if DEBUG
+        let persisted = ProcessInfo.processInfo.arguments.contains("-ui-testing")
+            ? PersistedQueue(items: [], isPaused: false)
+            : Self.loadPersistedQueue()
+        #else
         let persisted = Self.loadPersistedQueue()
+        #endif
         self.activeDownloads = persisted.items
             .filter { $0.state != .completed }
             .map { item in

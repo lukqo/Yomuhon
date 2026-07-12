@@ -261,8 +261,6 @@
 "search.genre.mystery" = "Mystery";
 "search.genre.scifi" = "Sci-Fi";
 "library.removeManga" = "Remove from Library";
-"search.recommendedForYou" = "Recommended for you";
-"search.recommendedForYou.subtitle" = "Based on what you already keep in your library.";
 "search.filter.title" = "Filters";
 "search.filter.subtitle" = "Filter by genre when you want to narrow the search.";
 "search.discovery.loading" = "Loading real covers from active sources…";
@@ -354,7 +352,7 @@
 "detail.language.auto" = "Auto";
 "sources.mangakatanaJSON.status" = "Declarative JSON adapter bundled for testing the universal scraping engine. Experimental and disabled by default.";
 "sources.declarative.status" = "Remote declarative source from your official Yomuhon-Sources repository.";
-"sources.declarative.experimentalStatus" = "Experimental remote declarative source. Validate with Test before using.";
+"sources.declarative.experimentalStatus" = "Remote source in testing. Yomuhon monitors it automatically and may pause it temporarily after repeated failures.";
 "sources.remote.refresh" = "Refresh remote";
 "sources.remote.refreshing" = "Updating remote source catalog…";
 "sources.remote.refreshed" = "Remote source catalog updated.";
@@ -393,7 +391,7 @@
 "sources.auto.idle" = "Waiting for automatic check";
 "sources.auto.checking" = "Checking source health…";
 "sources.auto.completedFormat" = "Last checked at %@";
-"sources.auto.updatedFormat" = "Source health updated: %d/%d sources verified and ready.";
+"sources.auto.updatedFormat" = "Source health updated: %d/%d sources are responding and ready.";
 "sources.auto.title" = "Automatic source health";
 "sources.auto.recheck" = "Recheck now";
 "sources.auto.paused" = "Paused automatically";

@@ -439,52 +439,8 @@ enum DeclarativeRemoteConfigLoader {
 }
 
 
-/// Version gate for remotely discovered source definitions.
-///
-/// Discovery and activation are intentionally separate. A config may exist in the
-/// catalog and appear in Settings, but the reader/search runtime must not execute
-/// that exact version until the local search -> chapters -> pages -> image smoke
-/// test has passed.
-final class DeclarativeSourceActivationStore {
-    static let shared = DeclarativeSourceActivationStore()
-
-    private let lock = NSLock()
-    private let userDefaults: UserDefaults
-    private let key = "yomuhon.sources.verifiedRemoteVersions.v1"
-
-    init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
-    }
-
-    func verifiedVersion(for sourceID: String) -> Int? {
-        lock.lock()
-        defer { lock.unlock() }
-        return (userDefaults.dictionary(forKey: key)?[sourceID] as? NSNumber)?.intValue
-    }
-
-    func isVerified(_ config: DeclarativeSourceConfig) -> Bool {
-        verifiedVersion(for: config.id) == config.version
-    }
-
-    func setVerifiedVersion(_ version: Int, for sourceID: String) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        var values = userDefaults.dictionary(forKey: key) ?? [:]
-        values[sourceID] = version
-        userDefaults.set(values, forKey: key)
-    }
-
-    func removeVerification(for sourceID: String) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        var values = userDefaults.dictionary(forKey: key) ?? [:]
-        values.removeValue(forKey: sourceID)
-        userDefaults.set(values, forKey: key)
-    }
-}
-
+/// Remote catalog definitions are activated by `index.json`. Runtime health
+/// is isolated locally by `SourceRuntimeCircuitBreaker`; diagnostics never gate use.
 enum DeclarativeSourceConfigurationValidator {
     private static let sourceIDPattern = #"^[a-z0-9][a-z0-9_-]*$"#
     private static let semanticVersionPattern = #"^[0-9]+\.[0-9]+\.[0-9]+$"#
@@ -579,7 +535,7 @@ enum DeclarativeSourceConfigurationValidator {
               config.language == entry.language,
               ((entry.kind == "declarative-html" && config.engineMode == .html)
                 || (entry.kind == "declarative-json-api" && config.engineMode == .jsonAPI)),
-              config.enabledByDefault == false,
+              config.enabledByDefault != true,
               config.version >= 1,
               config.id.range(of: sourceIDPattern, options: .regularExpression) != nil,
               config.baseURL.scheme?.lowercased() == "https",

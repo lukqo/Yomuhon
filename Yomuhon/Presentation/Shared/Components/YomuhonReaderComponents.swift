@@ -111,6 +111,7 @@ struct YomuhonReaderHUD<Trailing: View, BottomControls: View>: View {
     private var topBar: some View {
         HStack(spacing: YomuhonSpacing.medium) {
             ReaderRoundButton(systemName: "xmark", label: "common.close", action: closeAction, isDark: isDark)
+                .accessibilityIdentifier("reader.close")
 
             Spacer(minLength: YomuhonSpacing.small)
 

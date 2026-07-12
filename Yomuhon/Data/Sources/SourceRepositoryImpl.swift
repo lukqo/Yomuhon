@@ -73,20 +73,6 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
         return dynamicSources.filter { seen.insert($0.id).inserted }
     }
 
-    private func verifiedDeclarativeSources() -> [Source] {
-        guard includesRemoteDeclarativeSources else { return [] }
-        let trustedBundledVersions = Dictionary(
-            uniqueKeysWithValues: DeclarativeSourceFactory.bundledConfigs().map { ($0.id, $0.version) }
-        )
-
-        return DeclarativeRemoteConfigLoader.availableConfigs()
-            .filter { config in
-                DeclarativeSourceActivationStore.shared.isVerified(config)
-                    || trustedBundledVersions[config.id] == config.version
-            }
-            .map { DeclarativeSourceRuntime(config: $0) }
-    }
-
     private func discoverableDeclarativeSources() -> [Source] {
         guard includesRemoteDeclarativeSources else { return [] }
         return DeclarativeRemoteConfigLoader.availableConfigs()
@@ -117,10 +103,23 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
     }
 
     func popularManga() throws -> [Manga] {
-        try popularManga { _ in }
+        try popularManga(
+            cancellationToken: RequestCancellationToken(),
+            progress: { _ in }
+        )
     }
 
     func popularManga(
+        progress: @escaping (SourceDiscoveryProgress) -> Void
+    ) throws -> [Manga] {
+        try popularManga(
+            cancellationToken: RequestCancellationToken(),
+            progress: progress
+        )
+    }
+
+    func popularManga(
+        cancellationToken: RequestCancellationToken,
         progress: @escaping (SourceDiscoveryProgress) -> Void
     ) throws -> [Manga] {
         let sources = availableSources().filter { $0.supportsPopularDiscovery }
@@ -128,6 +127,7 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
 
         return try executeDiscovery(
             sources: sources,
+            cancellationToken: cancellationToken,
             progress: progress
         ) { source in
             try source.popularManga()
@@ -135,11 +135,27 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
     }
 
     func manga(forGenreID genreID: String) throws -> [Manga] {
-        try manga(forGenreID: genreID) { _ in }
+        try manga(
+            forGenreID: genreID,
+            cancellationToken: RequestCancellationToken(),
+            progress: { _ in }
+        )
     }
 
     func manga(
         forGenreID genreID: String,
+        progress: @escaping (SourceDiscoveryProgress) -> Void
+    ) throws -> [Manga] {
+        try manga(
+            forGenreID: genreID,
+            cancellationToken: RequestCancellationToken(),
+            progress: progress
+        )
+    }
+
+    func manga(
+        forGenreID genreID: String,
+        cancellationToken: RequestCancellationToken,
         progress: @escaping (SourceDiscoveryProgress) -> Void
     ) throws -> [Manga] {
         let sources = availableSources().filter { source in
@@ -150,6 +166,7 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
 
         return try executeDiscovery(
             sources: sources,
+            cancellationToken: cancellationToken,
             progress: progress
         ) { source in
             try source.manga(forGenreID: genreID)
@@ -158,9 +175,14 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
 
     private func executeDiscovery(
         sources: [Source],
+        cancellationToken: RequestCancellationToken,
         progress: @escaping (SourceDiscoveryProgress) -> Void,
         operation: @escaping (Source) throws -> [Manga]
     ) throws -> [Manga] {
+        guard !cancellationToken.isCancelled else {
+            throw HTTPClientError.cancelled
+        }
+
         let scheduledSources = queryScheduler.orderedSources(sources, operation: .discovery)
         let queue = queryScheduler.makeQueue(
             qualityOfService: .utility,
@@ -172,19 +194,33 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
         )
 
         let accumulator = SourceOperationAccumulator()
+        let completionGroup = DispatchGroup()
 
         for (index, source) in scheduledSources.enumerated() {
+            completionGroup.enter()
+
             let sourceOperation = BlockOperation {
+                defer { completionGroup.leave() }
+                guard !cancellationToken.isCancelled else { return }
+
                 let startedAt = Date()
 
                 do {
-                    let mangas = try queryScheduler.withExecutionSlot(priority: .background) {
+                    let mangas = try queryScheduler.withExecutionSlot(
+                        priority: .background,
+                        cancellationToken: cancellationToken
+                    ) {
                         try SourceRuntimeActivityCenter.shared.withInteractiveActivity {
                             try SourceRequestPriorityContext.withPriority(.interactive) {
-                                try operation(source)
+                                try HTTPRequestCancellationContext.withToken(cancellationToken) {
+                                    try operation(source)
+                                }
                             }
                         }
                     }
+
+                    guard !cancellationToken.isCancelled else { return }
+
                     let normalized = intakePipeline.normalizeSearchResults(mangas)
                     let completed = accumulator.appendAndComplete(normalized)
 
@@ -211,6 +247,8 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
                 } catch {
                     let completed = accumulator.recordAndComplete(error: error)
 
+                    guard !cancellationToken.isCancelled else { return }
+
                     if Self.shouldRecordSourceFailure(error) {
                         performanceStore.recordFailure(sourceID: source.id)
                         metricsStore.recordFailure(sourceID: source.id, operation: .discovery)
@@ -231,7 +269,17 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
             queue.addOperation(sourceOperation)
         }
 
-        queue.waitUntilAllOperationsAreFinished()
+        while completionGroup.wait(timeout: .now() + 0.08) != .success {
+            if cancellationToken.isCancelled {
+                queue.cancelAllOperations()
+                throw HTTPClientError.cancelled
+            }
+        }
+
+        if cancellationToken.isCancelled {
+            queue.cancelAllOperations()
+            throw HTTPClientError.cancelled
+        }
 
         let snapshot = accumulator.snapshot()
         let results = intakePipeline.normalizeSearchResults(snapshot.mangas)

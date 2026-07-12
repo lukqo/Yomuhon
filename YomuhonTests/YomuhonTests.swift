@@ -726,7 +726,7 @@ final class YomuhonTests: XCTestCase {
     }
 
     func testPublishedSourcesDoNotRequireDiagnosticVerification() throws {
-        let store = makeSourceStore(verifiedSourceIDs: ["mangadex"])
+        let store = makeSourceStore(operationalSourceIDs: ["mangadex"])
         let repository = SourceRepositoryImpl(
             sources: [ProbeSource(id: "mangadex"), ProbeSource(id: "mangapill")],
             settingsStore: store
@@ -735,7 +735,7 @@ final class YomuhonTests: XCTestCase {
         XCTAssertEqual(Set(repository.availableSources().map(\.id)), Set(["mangadex", "mangapill"]))
     }
 
-    func testVerifiedSourceRecoveryPersistsAcrossReloads() throws {
+    func testOperationalSourceRecoveryPersistsAcrossReloads() throws {
         let suiteName = "YomuhonTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
@@ -756,7 +756,7 @@ final class YomuhonTests: XCTestCase {
     }
 
     func testPersistedDiagnosticHealthDoesNotGatePublishedSources() throws {
-        let store = makeSourceStore(verifiedSourceIDs: ["mangadex", "mangapill"])
+        let store = makeSourceStore(operationalSourceIDs: ["mangadex", "mangapill"])
         var repositories = store.loadRepositories()
         if let index = repositories.firstIndex(where: { $0.id == "mangapill" }) {
             repositories[index].isEnabled = false
@@ -776,10 +776,10 @@ final class YomuhonTests: XCTestCase {
         XCTAssertEqual(Set(repository.availableSources().map(\.id)), Set(["mangadex", "mangapill"]))
     }
 
-    func testSearchRunsVerifiedSourcesInParallelAndPublishesProgress() throws {
+    func testSearchRunsPublishedSourcesInParallelAndPublishesProgress() throws {
         SourceSearchCache.shared.removeAll()
         let gate = ParallelSearchGate(expectedCount: 2)
-        let store = makeSourceStore(verifiedSourceIDs: ["mangadex", "mangapill"])
+        let store = makeSourceStore(operationalSourceIDs: ["mangadex", "mangapill"])
         let repository = SourceRepositoryImpl(
             sources: [
                 ProbeSource(id: "mangadex", gate: gate),
@@ -808,7 +808,7 @@ final class YomuhonTests: XCTestCase {
 
     func testSearchCancellationStopsCooperativeSourceWork() throws {
         SourceSearchCache.shared.removeAll()
-        let store = makeSourceStore(verifiedSourceIDs: ["mangadex"])
+        let store = makeSourceStore(operationalSourceIDs: ["mangadex"])
         let repository = SourceRepositoryImpl(
             sources: [CancellableProbeSource()],
             settingsStore: store
@@ -844,7 +844,7 @@ final class YomuhonTests: XCTestCase {
     func testSearchCacheAvoidsRepeatingTheSameSourceRequest() throws {
         SourceSearchCache.shared.removeAll()
         let counter = CallCounter()
-        let store = makeSourceStore(verifiedSourceIDs: ["mangadex"])
+        let store = makeSourceStore(operationalSourceIDs: ["mangadex"])
         let repository = SourceRepositoryImpl(
             sources: [ProbeSource(id: "mangadex", counter: counter)],
             settingsStore: store
@@ -859,7 +859,7 @@ final class YomuhonTests: XCTestCase {
 
     func testSearchCacheReplaysPerSourceProgressForRanking() throws {
         SourceSearchCache.shared.removeAll()
-        let store = makeSourceStore(verifiedSourceIDs: ["mangadex", "mangapill"])
+        let store = makeSourceStore(operationalSourceIDs: ["mangadex", "mangapill"])
         let repository = SourceRepositoryImpl(
             sources: [
                 ProbeSource(id: "mangadex"),
@@ -970,7 +970,7 @@ final class YomuhonTests: XCTestCase {
 
     func testSearchCacheDropsSourcesThatAreNoLongerAvailable() throws {
         SourceSearchCache.shared.removeAll()
-        let store = makeSourceStore(verifiedSourceIDs: ["mangadex", "mangapill"])
+        let store = makeSourceStore(operationalSourceIDs: ["mangadex", "mangapill"])
         let repository = SourceRepositoryImpl(
             sources: [ProbeSource(id: "mangadex"), ProbeSource(id: "mangapill")],
             settingsStore: store
@@ -1123,7 +1123,7 @@ final class YomuhonTests: XCTestCase {
         let slowMetadataSource = SlowMetadataProbeSource(delay: 1.0)
         let repository = SourceRepositoryImpl(
             sources: [ReadableDetailProbeSource()],
-            settingsStore: makeSourceStore(verifiedSourceIDs: []),
+            settingsStore: makeSourceStore(operationalSourceIDs: []),
             metadataEnrichmentService: MangaMetadataEnrichmentService(
                 providers: [slowMetadataSource]
             )
@@ -1570,36 +1570,38 @@ final class YomuhonTests: XCTestCase {
         XCTAssertTrue(configs.isEmpty)
     }
 
-    func testRemoteActivationRequiresExactValidatedVersion() throws {
-        let suiteName = "YomuhonTests.Activation.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let activationStore = DeclarativeSourceActivationStore(userDefaults: defaults)
-        let config = try JSONDecoder().decode(
-            DeclarativeSourceConfig.self,
-            from: Data(TestSourceFixtures.mangaPillJSON.utf8)
-        )
-
-        XCTAssertFalse(activationStore.isVerified(config))
-
-        activationStore.setVerifiedVersion(config.version, for: config.id)
-        XCTAssertTrue(activationStore.isVerified(config))
-
+    func testRemoteConfigAcceptsMissingLegacyEnabledByDefault() throws {
         var object = try XCTUnwrap(
             JSONSerialization.jsonObject(
                 with: Data(TestSourceFixtures.mangaPillJSON.utf8)
             ) as? [String: Any]
         )
-        object["version"] = config.version + 1
-        let newerConfig = try JSONDecoder().decode(
+        object.removeValue(forKey: "enabledByDefault")
+
+        let config = try JSONDecoder().decode(
             DeclarativeSourceConfig.self,
             from: JSONSerialization.data(withJSONObject: object)
         )
 
-        XCTAssertFalse(activationStore.isVerified(newerConfig))
-        XCTAssertEqual(activationStore.verifiedVersion(for: config.id), config.version)
+        XCTAssertNil(config.enabledByDefault)
+        XCTAssertTrue(DeclarativeSourceConfigurationValidator.validateStandalone(config))
+    }
+
+    func testRemoteConfigRejectsLegacyEnabledByDefaultTrue() throws {
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: Data(TestSourceFixtures.mangaPillJSON.utf8)
+            ) as? [String: Any]
+        )
+        object["enabledByDefault"] = true
+
+        let config = try JSONDecoder().decode(
+            DeclarativeSourceConfig.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertEqual(config.enabledByDefault, true)
+        XCTAssertFalse(DeclarativeSourceConfigurationValidator.validateStandalone(config))
     }
 
     func testLiveFiftyMangaReadabilitySmokeMatrix() throws {
@@ -2044,6 +2046,42 @@ final class YomuhonTests: XCTestCase {
 
         XCTAssertEqual(mangas.map(\.sourceID), [goodID])
         XCTAssertEqual(progressSourceIDs, Set([goodID, badID]))
+    }
+
+    func testPopularDiscoveryCancellationStopsInFlightSourceWork() throws {
+        let source = CancellableDiscoveryProbeSource()
+        let repository = SourceRepositoryImpl(sources: [source])
+        let token = RequestCancellationToken()
+        let finished = expectation(description: "discovery cancellation finishes")
+        let lock = NSLock()
+        var capturedError: Error?
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                _ = try repository.popularManga(
+                    cancellationToken: token,
+                    progress: { _ in }
+                )
+            } catch {
+                lock.lock()
+                capturedError = error
+                lock.unlock()
+            }
+            finished.fulfill()
+        }
+
+        XCTAssertTrue(source.waitUntilStarted(timeout: 1.0))
+        token.cancel()
+        wait(for: [finished], timeout: 1.5)
+
+        lock.lock()
+        let error = capturedError
+        lock.unlock()
+
+        guard case HTTPClientError.cancelled? = error else {
+            return XCTFail("Expected discovery cancellation, got \(String(describing: error))")
+        }
+        XCTAssertTrue(source.didObserveCancellation)
     }
 
     func testSearchRankingKeepsExactTitleAboveProviderRank() throws {
@@ -2951,7 +2989,7 @@ final class YomuhonTests: XCTestCase {
         XCTAssertEqual(viewModel.currentPageIndex, 0)
     }
 
-    private func makeSourceStore(verifiedSourceIDs: Set<String>) -> SourceSettingsStore {
+    private func makeSourceStore(operationalSourceIDs: Set<String>) -> SourceSettingsStore {
         let suiteName = "YomuhonTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -2959,11 +2997,11 @@ final class YomuhonTests: XCTestCase {
         var repositories = store.loadRepositories()
 
         for index in repositories.indices {
-            let verified = verifiedSourceIDs.contains(repositories[index].id)
-            repositories[index].isEnabled = verified
+            let isOperational = operationalSourceIDs.contains(repositories[index].id)
+            repositories[index].isEnabled = isOperational
             repositories[index].installedSources = repositories[index].installedSources.map { source in
                 var source = source
-                source.healthStatus = verified ? .available : .unavailable
+                source.healthStatus = isOperational ? .available : .unavailable
                 return source
             }
         }
@@ -3072,6 +3110,55 @@ private struct TestDownloadRepository: DownloadRepository {
     }
 }
 
+
+private final class CancellableDiscoveryProbeSource: Source {
+    let id = "cancellable_discovery_probe"
+    let name = "Cancellable Discovery Probe"
+    var supportsPopularDiscovery: Bool { true }
+
+    private let condition = NSCondition()
+    private var started = false
+    private var observedCancellation = false
+
+    var didObserveCancellation: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return observedCancellation
+    }
+
+    func waitUntilStarted(timeout: TimeInterval) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        while !started && Date() < deadline {
+            condition.wait(until: deadline)
+        }
+        return started
+    }
+
+    func popularManga() throws -> [Manga] {
+        condition.lock()
+        started = true
+        condition.broadcast()
+        condition.unlock()
+
+        let deadline = Date().addingTimeInterval(3)
+        while Date() < deadline {
+            if HTTPRequestCancellationContext.currentToken?.isCancelled == true {
+                condition.lock()
+                observedCancellation = true
+                condition.unlock()
+                throw HTTPClientError.cancelled
+            }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        return []
+    }
+
+    func searchManga(query: String) throws -> [Manga] { [] }
+    func fetchChapters(for manga: Manga) throws -> [Chapter] { [] }
+}
 
 private struct PopularDiscoveryProbeSource: Source {
     let id: String

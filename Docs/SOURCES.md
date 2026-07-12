@@ -54,6 +54,15 @@ At minimum:
 
 Definitions marked broken, disabled or deprecated should not become active reading sources.
 
+## Publication semantics
+
+The remote catalog is the publication authority.
+
+- `index.enabled` decides whether a source is published to the app.
+- `index.status` describes repository lifecycle state. `stable` and `testing` sources may be used; `broken`, `disabled` and `deprecated` sources are excluded.
+- Schema V1 still carries `enabledByDefault: false` as a legacy compatibility sentinel. It is not an activation switch and must never require a local Test action.
+- Temporary runtime health is local state managed by the circuit breaker and must remain separate from repository publication state.
+
 ## Health
 
 Source health is app-managed.
@@ -77,7 +86,7 @@ A full source diagnostic should verify a real reading path:
 3. At least one chapter is returned.
 4. At least one real page is returned from a chapter.
 
-A source that only returns catalog results is not a verified reading source.
+A source that only returns catalog results is not a proven readable source.
 
 ## Intake
 

@@ -216,6 +216,7 @@ struct MangaDetailView: View {
             if let downloadStatusMessage = viewModel.downloadStatusMessage {
                 Label(downloadStatusMessage, systemImage: "arrow.down.circle")
                     .font(YomuhonTypography.caption)
+                    .accessibilityIdentifier("detail.download.status")
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
             }
@@ -246,6 +247,7 @@ struct MangaDetailView: View {
             .clipShape(Capsule())
         }
         .buttonStyle(YomuhonPressableButtonStyle(theme: theme))
+        .accessibilityIdentifier("detail.download.menu")
         .fixedSize()
         .popover(isPresented: $showsDownloadOptions, arrowEdge: .bottom) {
             downloadOptionsPopover(for: chapter)
@@ -264,6 +266,7 @@ struct MangaDetailView: View {
                 showsDownloadOptions = false
                 viewModel.download(chapter)
             }
+            .accessibilityIdentifier("detail.download.chapter")
 
             Divider()
 
@@ -635,6 +638,7 @@ struct MangaDetailView: View {
             } label: {
                 content()
             }
+            .accessibilityIdentifier("reader.open.\(chapter.id)")
         } else {
             Button {
                 viewModel.prepareForReaderOpen()
@@ -643,6 +647,7 @@ struct MangaDetailView: View {
             } label: {
                 content()
             }
+            .accessibilityIdentifier("reader.open.\(chapter.id)")
         }
     }
 

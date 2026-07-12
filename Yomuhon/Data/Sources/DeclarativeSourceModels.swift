@@ -73,7 +73,9 @@ struct DeclarativeSourceConfig: Codable, Identifiable {
     let language: String
     let baseURL: URL
     let engineMode: DeclarativeEngineMode
-    let enabledByDefault: Bool
+    /// Legacy schema-v1 field. Publication is controlled by index.enabled/status.
+    /// Missing/false are accepted for backward compatibility; true is rejected.
+    let enabledByDefault: Bool?
     let experimental: Bool
     let allowedDomains: [String]
     let supports: DeclarativeSourceSupports
@@ -265,8 +267,8 @@ struct DeclarativeSourceTests: Codable {
 ///
 /// The authoring repository keeps smoke-test probes separate from source configs.
 /// `DeclarativeRemoteConfigLoader` normalizes this definition into
-/// `DeclarativeSourceTests` before caching the config, so offline activation checks
-/// keep using the same verified probe requirements.
+/// `DeclarativeSourceTests` before caching the config, so diagnostics and offline
+/// fallback keep using the same repository-authored probe requirements.
 struct DeclarativeRepositoryTestDefinition: Codable {
     let sourceID: String
     let queries: [String]

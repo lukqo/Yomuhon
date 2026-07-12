@@ -185,7 +185,7 @@ final class SourcesViewModel: ObservableObject {
     }
 
     func testAllSources() {
-        runVerifiedDiagnostics(force: true)
+        runHealthDiagnostics(force: true)
     }
 
     func performScheduledMaintenanceIfNeeded() {
@@ -202,13 +202,13 @@ final class SourcesViewModel: ObservableObject {
                 self.scheduleAutomaticMaintenance(after: 15)
                 return
             }
-            self.runVerifiedDiagnostics(force: false)
+            self.runHealthDiagnostics(force: false)
         }
         scheduledMaintenanceWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
-    private func runVerifiedDiagnostics(force: Bool) {
+    private func runHealthDiagnostics(force: Bool) {
         guard healthAutomationState != .checking else { return }
 
         if !force, SourceRuntimeActivityCenter.shared.hasInteractiveActivity {

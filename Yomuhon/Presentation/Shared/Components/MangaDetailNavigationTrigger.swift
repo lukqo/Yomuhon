@@ -48,6 +48,7 @@ struct MangaDetailNavigationTrigger<Content: View>: View {
                 content
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("manga.open.\(manga.id)")
         } else {
             NavigationLink {
                 MangaDetailView(viewModel: makeDetailViewModel())
@@ -55,6 +56,7 @@ struct MangaDetailNavigationTrigger<Content: View>: View {
                 content
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("manga.open.\(manga.id)")
         }
     }
 

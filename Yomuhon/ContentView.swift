@@ -14,13 +14,24 @@ struct ContentView: View {
     @AppStorage("yomuhon.hasCompletedOnboarding") private var hasCompletedOnboarding = false
     // This object intentionally lives at app level. Source recovery must start
     // on launch, not only after the user opens Settings > Sources.
-    @StateObject private var sourceMaintenance = SourcesViewModel(store: SourceSettingsStore.shared)
+    @StateObject private var sourceMaintenance: SourcesViewModel
+
+    init() {
+        #if DEBUG
+        let maintenanceStore: SourceSettingsStoring = Self.isUITesting
+            ? YomuhonUITestSourceSettingsStore()
+            : SourceSettingsStore.shared
+        #else
+        let maintenanceStore: SourceSettingsStoring = SourceSettingsStore.shared
+        #endif
+        _sourceMaintenance = StateObject(wrappedValue: SourcesViewModel(store: maintenanceStore))
+    }
 
     var body: some View {
         ZStack {
-            RootView()
+            RootView(compositionRoot: .application)
 
-            if !hasCompletedOnboarding {
+            if !hasCompletedOnboarding && !isUITesting {
                 OnboardingView {
                     withAnimation(activeTheme.animation) { hasCompletedOnboarding = true }
                 }
@@ -32,13 +43,27 @@ struct ContentView: View {
         .animation(activeTheme.animation, value: selectedThemeID)
         .animation(activeTheme.animation, value: hasCompletedOnboarding)
         .onAppear {
-            sourceMaintenance.performScheduledMaintenanceIfNeeded()
+            if !isUITesting {
+                sourceMaintenance.performScheduledMaintenanceIfNeeded()
+            }
             configureMacWindowIfNeeded()
         }
     }
 
     private var activeTheme: YomuhonTheme {
         AppTheme.theme(for: selectedThemeID)
+    }
+
+    private static var isUITesting: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-ui-testing")
+        #else
+        false
+        #endif
+    }
+
+    private var isUITesting: Bool {
+        Self.isUITesting
     }
 
     private func configureMacWindowIfNeeded() {

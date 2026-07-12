@@ -191,15 +191,6 @@ struct SearchView: View {
                 genreResultsSection(genre: genre, width: width)
             }
 
-            if !viewModel.personalizedMangas.isEmpty {
-                mangaPosterSection(
-                    title: "search.recommendedForYou",
-                    subtitle: "search.recommendedForYou.subtitle",
-                    mangas: viewModel.personalizedMangas,
-                    width: width
-                )
-            }
-
             if !viewModel.popularMangas.isEmpty {
                 mangaPosterSection(
                     title: "search.popularManga",

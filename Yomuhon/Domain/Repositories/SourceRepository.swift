@@ -48,11 +48,13 @@ protocol ProgressiveSourceRepository: SourceRepository {
 
 protocol ProgressiveDiscoveryRepository: SourceRepository {
     func popularManga(
+        cancellationToken: RequestCancellationToken,
         progress: @escaping (SourceDiscoveryProgress) -> Void
     ) throws -> [Manga]
 
     func manga(
         forGenreID genreID: String,
+        cancellationToken: RequestCancellationToken,
         progress: @escaping (SourceDiscoveryProgress) -> Void
     ) throws -> [Manga]
 }

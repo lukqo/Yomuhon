@@ -158,7 +158,7 @@ struct NativeSourceAdapterDescriptor: Identifiable, Hashable {
     let id: String
     let name: String
     let language: String
-    let isEnabledByDefault: Bool
+    let isEnabledInitially: Bool
     let supportsReading: Bool
     let statusMessage: String
     var isBundled: Bool
@@ -168,7 +168,7 @@ struct NativeSourceAdapterDescriptor: Identifiable, Hashable {
         id: String,
         name: String,
         language: String,
-        isEnabledByDefault: Bool,
+        isEnabledInitially: Bool,
         supportsReading: Bool,
         statusMessage: String,
         isBundled: Bool = true,
@@ -177,7 +177,7 @@ struct NativeSourceAdapterDescriptor: Identifiable, Hashable {
         self.id = id
         self.name = name
         self.language = language
-        self.isEnabledByDefault = isEnabledByDefault
+        self.isEnabledInitially = isEnabledInitially
         self.supportsReading = supportsReading
         self.statusMessage = statusMessage
         self.isBundled = isBundled
@@ -188,7 +188,7 @@ struct NativeSourceAdapterDescriptor: Identifiable, Hashable {
         SourceRepositoryConfiguration(
             id: id,
             name: name,
-            isEnabled: isEnabledByDefault,
+            isEnabled: isEnabledInitially,
             isBundled: isBundled,
             installedSources: [
                 InstalledSourceConfiguration(
@@ -206,7 +206,25 @@ struct NativeSourceAdapterDescriptor: Identifiable, Hashable {
 }
 
 enum NativeSourceCatalog {
-    static let nativeAdapters: [NativeSourceAdapterDescriptor] = []
+    static var nativeAdapters: [NativeSourceAdapterDescriptor] {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing") {
+            return [
+                NativeSourceAdapterDescriptor(
+                    id: "ui_test",
+                    name: "UI Test Source",
+                    language: "en",
+                    isEnabledInitially: true,
+                    supportsReading: true,
+                    statusMessage: "",
+                    isBundled: true,
+                    initialHealthStatus: .available
+                )
+            ]
+        }
+        #endif
+        return []
+    }
 
     static var adapters: [NativeSourceAdapterDescriptor] {
         var seen = Set<String>()
@@ -222,10 +240,10 @@ enum NativeSourceCatalog {
                     id: config.id,
                     name: config.name,
                     language: config.language,
-                    // The repository index is authoritative for discovery. Published
-                    // stable/testing definitions are available immediately; runtime
-                    // failures are isolated by the in-memory circuit breaker.
-                    isEnabledByDefault: true,
+                    // `availableConfigs()` already filters index.enabled/status.
+                    // A published stable/testing definition starts operational immediately;
+                    // runtime failures are isolated by the circuit breaker.
+                    isEnabledInitially: true,
                     supportsReading: config.supports.pages,
                     statusMessage: config.experimental ? "sources.declarative.experimentalStatus" : "sources.declarative.status",
                     isBundled: false,

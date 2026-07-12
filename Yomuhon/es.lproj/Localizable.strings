@@ -262,8 +262,6 @@
 "search.genre.mystery" = "Misterio";
 "search.genre.scifi" = "Ciencia ficción";
 "library.removeManga" = "Quitar de biblioteca";
-"search.recommendedForYou" = "Recomendados para ti";
-"search.recommendedForYou.subtitle" = "Basado en lo que ya tienes en tu biblioteca.";
 "search.filter.title" = "Filtros";
 "search.filter.subtitle" = "Filtra por género cuando quieras acotar la búsqueda.";
 "search.discovery.loading" = "Cargando portadas reales desde las fuentes activas…";
@@ -355,7 +353,7 @@
 "detail.language.auto" = "Auto";
 "sources.mangakatanaJSON.status" = "Adaptador JSON declarativo incluido para probar el motor universal de scraping. Experimental y desactivado por defecto.";
 "sources.declarative.status" = "Fuente declarativa remota desde tu repositorio oficial Yomuhon-Sources.";
-"sources.declarative.experimentalStatus" = "Fuente declarativa remota experimental. Valídala con Test antes de usarla.";
+"sources.declarative.experimentalStatus" = "Fuente remota en pruebas. Yomuhon supervisa su estado automáticamente y puede pausarla temporalmente tras fallos repetidos.";
 "sources.remote.refresh" = "Actualizar remoto";
 "sources.remote.refreshing" = "Actualizando catálogo remoto de fuentes…";
 "sources.remote.refreshed" = "Catálogo remoto de fuentes actualizado.";

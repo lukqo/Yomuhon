@@ -128,7 +128,6 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var hasSearched = false
     @Published private(set) var hasEnabledSources = true
     @Published private(set) var popularMangas: [Manga] = []
-    @Published private(set) var personalizedMangas: [Manga] = []
     @Published private(set) var discoveryGenres: [SourceDiscoveryGenre] = []
     @Published private(set) var selectedGenre: SourceDiscoveryGenre?
     @Published private(set) var genreMangas: [Manga] = []
@@ -140,12 +139,12 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var totalSourceCount = 0
 
     private let searchMangaUseCase: SearchMangaUseCase
-    private let getLibraryUseCase: GetLibraryUseCase
-    private let sourceSettingsStore: SourceSettingsStoring
     private var searchGeneration = 0
     private var discoveryGeneration = 0
     private var genreGeneration = 0
     private var activeSearchToken: RequestCancellationToken?
+    private var activeDiscoveryToken: RequestCancellationToken?
+    private var activeGenreToken: RequestCancellationToken?
     private var searchSourcePositions: [String: Int] = [:]
     private var popularSourcePositions: [String: Int] = [:]
     private var genreSourcePositions: [String: Int] = [:]
@@ -153,19 +152,15 @@ final class SearchViewModel: ObservableObject {
     private var popularStableOrder: [String] = []
     private var genreStableOrder: [String] = []
 
-    init(
-        searchMangaUseCase: SearchMangaUseCase,
-        getLibraryUseCase: GetLibraryUseCase,
-        sourceSettingsStore: SourceSettingsStoring
-    ) {
+    init(searchMangaUseCase: SearchMangaUseCase) {
         self.searchMangaUseCase = searchMangaUseCase
-        self.getLibraryUseCase = getLibraryUseCase
-        self.sourceSettingsStore = sourceSettingsStore
         refreshSourceAvailability()
     }
 
     deinit {
         activeSearchToken?.cancel()
+        activeDiscoveryToken?.cancel()
+        activeGenreToken?.cancel()
     }
 
     var trimmedQuery: String {
@@ -332,17 +327,18 @@ final class SearchViewModel: ObservableObject {
         discoveryGeneration += 1
         let generation = discoveryGeneration
         let useCase = searchMangaUseCase
-        let librarySnapshot = getLibraryUseCase.execute()
-        let recommendationQueries = Self.recommendationQueries(for: librarySnapshot.mangas)
 
-        personalizedMangas = []
+        activeDiscoveryToken?.cancel()
+        let cancellationToken = RequestCancellationToken()
+        activeDiscoveryToken = cancellationToken
+
         popularSourcePositions = [:]
         popularStableOrder = []
         isLoadingDiscovery = true
 
         DispatchQueue.global(qos: .utility).async {
             let popularResult = Result {
-                try useCase.popularManga { progress in
+                try useCase.popularManga(cancellationToken: cancellationToken) { progress in
                     DispatchQueue.main.async { [weak self] in
                         guard let self, generation == self.discoveryGeneration else {
                             return
@@ -370,13 +366,6 @@ final class SearchViewModel: ObservableObject {
                 }
             }
 
-            let recommendedMangas = recommendationQueries.compactMap { query -> Manga? in
-                guard let mangas = try? useCase.execute(query: query) else {
-                    return nil
-                }
-
-                return mangas.first { NativeSourceCatalog.supportsReading(sourceID: $0.sourceID) } ?? mangas.first
-            }
 
             DispatchQueue.main.async { [weak self] in
                 guard let self, generation == self.discoveryGeneration else {
@@ -396,16 +385,17 @@ final class SearchViewModel: ObservableObject {
                     self.logDiscoveryRanking(kind: "POPULAR", mangas: self.popularMangas)
                 }
 
-                self.personalizedMangas = self.discoveryMangas(
-                    from: recommendedMangas,
-                    limit: 8
-                )
+                self.activeDiscoveryToken = nil
                 self.isLoadingDiscovery = false
             }
         }
     }
 
     func reloadDiscoveryForSourceCatalogChange() {
+        activeDiscoveryToken?.cancel()
+        activeDiscoveryToken = nil
+        activeGenreToken?.cancel()
+        activeGenreToken = nil
         discoveryGeneration += 1
         genreGeneration += 1
         popularMangas = []
@@ -431,6 +421,10 @@ final class SearchViewModel: ObservableObject {
             query = ""
         }
 
+        activeGenreToken?.cancel()
+        let cancellationToken = RequestCancellationToken()
+        activeGenreToken = cancellationToken
+
         genreGeneration += 1
         let generation = genreGeneration
         let useCase = searchMangaUseCase
@@ -443,7 +437,10 @@ final class SearchViewModel: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result {
-                try useCase.manga(forGenreID: genre.id) { progress in
+                try useCase.manga(
+                    forGenreID: genre.id,
+                    cancellationToken: cancellationToken
+                ) { progress in
                     DispatchQueue.main.async { [weak self] in
                         guard let self,
                               generation == self.genreGeneration,
@@ -494,6 +491,7 @@ final class SearchViewModel: ObservableObject {
                     self.genreStableOrder = stabilized.order
                     self.logDiscoveryRanking(kind: "GENRE:\(genre.id)", mangas: self.genreMangas)
                 }
+                self.activeGenreToken = nil
                 self.isLoadingGenre = false
             }
         }
@@ -514,6 +512,8 @@ final class SearchViewModel: ObservableObject {
             return
         }
 
+        activeGenreToken?.cancel()
+        activeGenreToken = nil
         genreGeneration += 1
         selectedGenre = nil
         genreMangas = []
@@ -759,44 +759,10 @@ final class SearchViewModel: ObservableObject {
     }
 
     func refreshSourceAvailability() {
-        hasEnabledSources = sourceSettingsStore
-            .loadRepositories()
-            .contains { repository in
-                NativeSourceCatalog.isOperational(repository)
-            }
+        hasEnabledSources = searchMangaUseCase.hasAvailableSources()
     }
 
-    private static func recommendationQueries(for library: [Manga]) -> [String] {
-        guard !library.isEmpty else {
-            return []
-        }
 
-        let titles = library.map { $0.title.lowercased() }.joined(separator: " ")
-
-        if titles.contains("chainsaw") {
-            return ["Dandadan", "Jujutsu Kaisen", "Tokyo Ghoul", "Hell's Paradise"]
-        }
-
-        if titles.contains("one piece") {
-            return ["Kingdom", "Hunter x Hunter", "Naruto", "Black Clover"]
-        }
-
-        if titles.contains("jujutsu") {
-            return ["Chainsaw Man", "Dandadan", "Bleach", "Tokyo Ghoul"]
-        }
-
-        if titles.contains("berserk") || titles.contains("vagabond") {
-            return ["Vinland Saga", "Kingdom", "Claymore", "Vagabond"]
-        }
-
-        if titles.contains("romance") || titles.contains("honey") || titles.contains("otaku") {
-            return ["Kaguya-sama", "Horimiya", "Blue Box", "Fruits Basket"]
-        }
-
-        // No fabricated "personalization" fallback. If the user's library does
-        // not provide a meaningful signal yet, Discover simply shows Popular.
-        return []
-    }
 
 }
 
@@ -1326,23 +1292,6 @@ private extension Array where Element: Hashable {
     }
 }
 
-
-enum MangaDiscovery {
-    static let popularTitles: [String] = [
-        "One Piece",
-        "Chainsaw Man",
-        "Jujutsu Kaisen",
-        "Berserk",
-        "Solo Leveling",
-        "Kingdom",
-        "Spy x Family",
-        "Blue Lock",
-        "Frieren",
-        "Dandadan",
-        "Vagabond",
-        "Tokyo Ghoul"
-    ]
-}
 
 
 struct SearchSourceFilter: Identifiable, Equatable {

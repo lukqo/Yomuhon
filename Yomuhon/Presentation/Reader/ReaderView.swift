@@ -73,6 +73,7 @@ struct ReaderView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
+        .accessibilityIdentifier(readerContentAccessibilityIdentifier)
         .onAppear {
             viewModel.markOpened()
             viewModel.loadPagesIfNeeded()
@@ -458,6 +459,16 @@ struct ReaderView: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var readerContentAccessibilityIdentifier: String {
+        guard !viewModel.pages.isEmpty else {
+            return "reader.content.empty"
+        }
+
+        return viewModel.pages.allSatisfy { $0.localFileURL != nil }
+            ? "reader.content.local"
+            : "reader.content.remote"
     }
 
     private func closeReader() {

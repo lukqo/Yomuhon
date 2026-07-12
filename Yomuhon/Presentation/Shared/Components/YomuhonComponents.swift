@@ -224,6 +224,7 @@ struct YomuhonNativeSearchField: View {
 
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
+                .accessibilityIdentifier("search.field")
                 .font(.body)
                 .foregroundColor(theme.textPrimary)
 

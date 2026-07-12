@@ -14,6 +14,10 @@ struct SearchMangaUseCase {
         try repository.searchManga(query: query)
     }
 
+    func hasAvailableSources() -> Bool {
+        !repository.availableSources().isEmpty
+    }
+
     func execute(
         query: String,
         cancellationToken: RequestCancellationToken,
@@ -48,10 +52,18 @@ struct SearchMangaUseCase {
     }
 
     func popularManga(
+        cancellationToken: RequestCancellationToken,
         progress: @escaping (SourceDiscoveryProgress) -> Void
     ) throws -> [Manga] {
+        guard !cancellationToken.isCancelled else {
+            throw HTTPClientError.cancelled
+        }
+
         guard let progressiveRepository = repository as? ProgressiveDiscoveryRepository else {
             let mangas = try repository.popularManga()
+            guard !cancellationToken.isCancelled else {
+                throw HTTPClientError.cancelled
+            }
             progress(
                 SourceDiscoveryProgress(
                     sourceID: "all",
@@ -63,15 +75,26 @@ struct SearchMangaUseCase {
             return mangas
         }
 
-        return try progressiveRepository.popularManga(progress: progress)
+        return try progressiveRepository.popularManga(
+            cancellationToken: cancellationToken,
+            progress: progress
+        )
     }
 
     func manga(
         forGenreID genreID: String,
+        cancellationToken: RequestCancellationToken,
         progress: @escaping (SourceDiscoveryProgress) -> Void
     ) throws -> [Manga] {
+        guard !cancellationToken.isCancelled else {
+            throw HTTPClientError.cancelled
+        }
+
         guard let progressiveRepository = repository as? ProgressiveDiscoveryRepository else {
             let mangas = try repository.manga(forGenreID: genreID)
+            guard !cancellationToken.isCancelled else {
+                throw HTTPClientError.cancelled
+            }
             progress(
                 SourceDiscoveryProgress(
                     sourceID: "all",
@@ -85,6 +108,7 @@ struct SearchMangaUseCase {
 
         return try progressiveRepository.manga(
             forGenreID: genreID,
+            cancellationToken: cancellationToken,
             progress: progress
         )
     }
