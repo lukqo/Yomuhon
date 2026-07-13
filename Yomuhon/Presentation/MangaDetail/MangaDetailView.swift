@@ -248,6 +248,7 @@ struct MangaDetailView: View {
         }
         .buttonStyle(YomuhonPressableButtonStyle(theme: theme))
         .accessibilityIdentifier("detail.download.menu")
+        .accessibilityValue(downloadAccessibilityValue(for: chapter))
         .fixedSize()
         .popover(isPresented: $showsDownloadOptions, arrowEdge: .bottom) {
             downloadOptionsPopover(for: chapter)
@@ -697,6 +698,18 @@ struct MangaDetailView: View {
         }
 
         return chapter.isDownloaded ? "checkmark" : "arrow.down"
+    }
+
+    private func downloadAccessibilityValue(for chapter: Chapter) -> String {
+        if chapter.isDownloaded {
+            return "downloaded"
+        }
+
+        if viewModel.isDownloading {
+            return "downloading"
+        }
+
+        return "not-downloaded"
     }
 
     private var readingPanelTitle: String {

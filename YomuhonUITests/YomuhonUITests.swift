@@ -26,11 +26,7 @@ final class YomuhonUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(searchNavigationButton(in: app).waitForExistence(timeout: 8))
-        XCTAssertTrue(
-            app.buttons.matching(
-                NSPredicate(format: "label == %@ OR label == %@", "Downloads", "Descargas")
-            ).firstMatch.exists
-        )
+        XCTAssertTrue(downloadsNavigationButton(in: app).waitForExistence(timeout: 8))
     }
 
     func testSearchDetailReaderFlowUsesDeterministicFixture() throws {
@@ -64,17 +60,9 @@ final class YomuhonUITests: XCTestCase {
         let deadline = Date().addingTimeInterval(5)
         var isDownloaded = false
         while Date() < deadline && !isDownloaded {
-            downloadMenu.tap()
-            let option = element("detail.download.chapter", in: app)
-            if option.waitForExistence(timeout: 0.4) {
-                let label = option.label
-                if label == "Downloaded" || label == "Descargado" {
-                    isDownloaded = true
-                    break
-                }
-            }
-            if option.exists {
-                downloadMenu.tap()
+            isDownloaded = (downloadMenu.value as? String) == "downloaded"
+            if !isDownloaded {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
             }
         }
         XCTAssertTrue(isDownloaded, "The fixture chapter should become downloaded.")
@@ -117,9 +105,23 @@ final class YomuhonUITests: XCTestCase {
     }
 
     private func searchNavigationButton(in app: XCUIApplication) -> XCUIElement {
-        app.buttons.matching(
+        #if os(macOS)
+        return app.buttons["navigation.search"]
+        #else
+        return app.tabBars.buttons.matching(
             NSPredicate(format: "label == %@ OR label == %@", "Search", "Buscar")
         ).firstMatch
+        #endif
+    }
+
+    private func downloadsNavigationButton(in app: XCUIApplication) -> XCUIElement {
+        #if os(macOS)
+        return app.buttons["navigation.downloads"]
+        #else
+        return app.tabBars.buttons.matching(
+            NSPredicate(format: "label == %@ OR label == %@", "Downloads", "Descargas")
+        ).firstMatch
+        #endif
     }
 
     private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {

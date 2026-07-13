@@ -125,6 +125,7 @@ struct RegularRootView: View {
             ) {
                 navigationModel.selectSection(.search)
             }
+            .accessibilityIdentifier("navigation.search")
 
             SidebarButton(
                 title: AppSection.downloads.title,
@@ -133,6 +134,7 @@ struct RegularRootView: View {
             ) {
                 navigationModel.selectSection(.downloads)
             }
+            .accessibilityIdentifier("navigation.downloads")
         }
     }
 
@@ -144,6 +146,7 @@ struct RegularRootView: View {
         ) {
             navigationModel.selectSection(.settings)
         }
+        .accessibilityIdentifier("navigation.settings")
     }
 
     private func sidebarTitle(_ key: LocalizedStringKey) -> some View {

@@ -39,6 +39,138 @@ enum DeclarativeSourceError: LocalizedError {
     }
 }
 
+/// Network policy for remotely described sources.
+///
+/// Source JSON is controlled by the Yomuhon catalog, so `allowedDomains` is an
+/// expected-host diagnostic rather than a hard runtime allowlist. Runtime URLs
+/// still have to be public HTTPS destinations: loopback, private/link-local
+/// addresses and common local-only hostnames are rejected.
+enum DeclarativeNetworkURLPolicy {
+    static func permits(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https",
+              let host = normalizedHost(url.host),
+              !isBlockedHost(host)
+        else {
+            return false
+        }
+
+        return true
+    }
+
+    static func isExpectedHost(_ host: String?, allowedDomains: [String]) -> Bool {
+        guard let host = normalizedHost(host) else { return false }
+
+        return allowedDomains.contains { domain in
+            guard let expected = normalizedHost(domain) else { return false }
+            return host == expected || host.hasSuffix(".\(expected)")
+        }
+    }
+
+    private static func normalizedHost(_ host: String?) -> String? {
+        guard var host = host?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines),
+              !host.isEmpty
+        else {
+            return nil
+        }
+
+        host = host.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        if host.hasPrefix("[") && host.hasSuffix("]") {
+            host.removeFirst()
+            host.removeLast()
+        }
+        if let zoneIndex = host.firstIndex(of: "%") {
+            host = String(host[..<zoneIndex])
+        }
+        return host.isEmpty ? nil : host
+    }
+
+    private static func isBlockedHost(_ host: String) -> Bool {
+        let localNames = [
+            "localhost",
+            "home.arpa",
+            ".localhost",
+            ".local",
+            ".localdomain",
+            ".lan",
+            ".internal",
+            ".home.arpa"
+        ]
+
+        if localNames.contains(where: { suffix in
+            suffix.hasPrefix(".") ? host.hasSuffix(suffix) : host == suffix
+        }) {
+            return true
+        }
+
+        if let octets = ipv4Octets(host) {
+            return isBlockedIPv4(octets)
+        }
+
+        if host.contains(":") {
+            return isBlockedIPv6(host)
+        }
+
+        // A single-label hostname is normally local/search-domain scoped rather
+        // than an Internet host. Declarative sources only need public origins.
+        return !host.contains(".")
+    }
+
+    private static func ipv4Octets(_ host: String) -> [Int]? {
+        let components = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard components.count == 4 else { return nil }
+
+        let octets = components.compactMap { component -> Int? in
+            guard !component.isEmpty,
+                  component.allSatisfy({ $0.isNumber }),
+                  let value = Int(component),
+                  (0...255).contains(value)
+            else {
+                return nil
+            }
+            return value
+        }
+
+        return octets.count == 4 ? octets : nil
+    }
+
+    private static func isBlockedIPv4(_ octets: [Int]) -> Bool {
+        let a = octets[0]
+        let b = octets[1]
+        let c = octets[2]
+
+        if a == 0 || a >= 224 { return true }
+        if a == 10 || a == 127 { return true }
+        if a == 100 && (64...127).contains(b) { return true }
+        if a == 169 && b == 254 { return true }
+        if a == 172 && (16...31).contains(b) { return true }
+        if a == 192 && b == 168 { return true }
+        if a == 192 && b == 0 && [0, 2].contains(c) { return true }
+        if a == 192 && b == 88 && c == 99 { return true }
+        if a == 198 && (18...19).contains(b) { return true }
+        if a == 198 && b == 51 && c == 100 { return true }
+        if a == 203 && b == 0 && c == 113 { return true }
+
+        return false
+    }
+
+    private static func isBlockedIPv6(_ host: String) -> Bool {
+        let value = host.lowercased()
+
+        if value == "::" || value == "::1" { return true }
+        if value.hasPrefix("fc") || value.hasPrefix("fd") { return true }
+        if ["fe8", "fe9", "fea", "feb"].contains(where: value.hasPrefix) { return true }
+        if value.hasPrefix("ff") { return true }
+        if value.hasPrefix("2001:db8:") || value == "2001:db8::" { return true }
+
+        if let mappedIPv4 = value.split(separator: ":").last.map(String.init),
+           let octets = ipv4Octets(mappedIPv4) {
+            return isBlockedIPv4(octets)
+        }
+
+        return false
+    }
+}
+
 enum DeclarativeEngineMode: String, Codable {
     case html
     case jsonAPI = "json-api"

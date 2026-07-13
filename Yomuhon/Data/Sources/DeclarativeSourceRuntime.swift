@@ -179,7 +179,7 @@ struct DeclarativeSourceRuntime: Source {
             ?? manga.declarativeCleanSynopsis
         let coverURL = detailsSelector?.cover
             .flatMap { extractField($0, from: document) }
-            .flatMap { resolveURL($0, relativeTo: mangaURL, enforceAllowedHost: true) }
+            .flatMap { resolveURL($0, relativeTo: mangaURL, enforceNetworkPolicy: true) }
             ?? manga.coverURL
         let alternativeTitles = detailsSelector?.alternativeTitles
             .flatMap { extractField($0, from: document) }
@@ -312,7 +312,7 @@ struct DeclarativeSourceRuntime: Source {
             for item in selectedItems {
                 let rawURL = extractField(selector.url, from: item) ?? item.attr("href")
                 guard let rawURL,
-                      let originalURL = resolveURL(rawURL, relativeTo: url, enforceAllowedHost: true)
+                      let originalURL = resolveURL(rawURL, relativeTo: url, enforceNetworkPolicy: true)
                 else {
                     rejectedURLCount += 1
                     continue
@@ -330,7 +330,7 @@ struct DeclarativeSourceRuntime: Source {
 
                 let coverURL = selector.cover
                     .flatMap { extractField($0, from: item) }
-                    .flatMap { resolveURL($0, relativeTo: url, enforceAllowedHost: true) }
+                    .flatMap { resolveURL($0, relativeTo: url, enforceNetworkPolicy: true) }
                 let alternativeTitles = selector.alternativeTitles
                     .flatMap { extractField($0, from: item) }
                     .map { parseDeclarativeAlternativeTitles($0) }
@@ -522,7 +522,7 @@ struct DeclarativeSourceRuntime: Source {
         for item in selectedItems {
             let rawURL = extractField(selector.url, from: item) ?? item.attr("href")
             guard let rawURL,
-                  let chapterURL = resolveURL(rawURL, relativeTo: mangaURL, enforceAllowedHost: true)
+                  let chapterURL = resolveURL(rawURL, relativeTo: mangaURL, enforceNetworkPolicy: true)
             else {
                 continue
             }
@@ -645,7 +645,8 @@ struct DeclarativeSourceRuntime: Source {
     ) -> [URL] {
         var output: [URL] = []
         var seenURLs = Set<String>()
-        var rejectedHosts = Set<String>()
+        var blockedHosts = Set<String>()
+        var unexpectedPublicHosts = Set<String>()
         var totalRawCandidates = 0
         var totalInvalidURLs = 0
         var totalRejectedByHost = 0
@@ -657,18 +658,24 @@ struct DeclarativeSourceRuntime: Source {
             guard let url = resolveURL(
                 rawCandidate,
                 relativeTo: chapterURL,
-                enforceAllowedHost: false
+                enforceNetworkPolicy: false
             ) else {
                 totalInvalidURLs += 1
                 return
             }
 
-            guard isAllowedHost(url.host) else {
+            guard DeclarativeNetworkURLPolicy.permits(url) else {
                 totalRejectedByHost += 1
-                if let host = url.host, rejectedHosts.count < 6 {
-                    rejectedHosts.insert(host)
+                if let host = url.host, blockedHosts.count < 6 {
+                    blockedHosts.insert(host)
                 }
                 return
+            }
+
+            if !DeclarativeNetworkURLPolicy.isExpectedHost(url.host, allowedDomains: config.allowedDomains),
+               let host = url.host,
+               unexpectedPublicHosts.count < 6 {
+                unexpectedPublicHosts.insert(host)
             }
 
             guard isAllowedImage(url, filters: selector.filters) else {
@@ -731,7 +738,7 @@ struct DeclarativeSourceRuntime: Source {
 
         SourceDebugTrace.log(
             "Parser",
-            "source=\(id) PAGE_RESULT accepted=\(output.count) rawCandidates=\(totalRawCandidates) invalidURL=\(totalInvalidURLs) rejectedHost=\(totalRejectedByHost) rejectedFilter=\(totalRejectedByFilter) rejectedHosts=\(Array(rejectedHosts).sorted())"
+            "source=\(id) PAGE_RESULT accepted=\(output.count) rawCandidates=\(totalRawCandidates) invalidURL=\(totalInvalidURLs) blockedNonPublic=\(totalRejectedByHost) rejectedFilter=\(totalRejectedByFilter) blockedHosts=\(Array(blockedHosts).sorted()) unexpectedPublicHosts=\(Array(unexpectedPublicHosts).sorted())"
         )
         return output
     }
@@ -925,13 +932,14 @@ struct DeclarativeSourceRuntime: Source {
             )
             return nil
         }
-        guard isAllowedHost(resolved.host) else {
+        guard DeclarativeNetworkURLPolicy.permits(resolved) else {
             SourceDebugTrace.log(
                 "Runtime",
-                "source=\(id) ROUTE blocked host=\(resolved.host ?? "nil") url=\(resolved.absoluteString)"
+                "source=\(id) ROUTE blocked non-public url=\(resolved.absoluteString)"
             )
             return nil
         }
+        traceUnexpectedHost(resolved, context: "route")
         return resolved
     }
 
@@ -943,7 +951,7 @@ struct DeclarativeSourceRuntime: Source {
         }
     }
 
-    private func resolveURL(_ rawValue: String, relativeTo contextURL: URL, enforceAllowedHost: Bool) -> URL? {
+    private func resolveURL(_ rawValue: String, relativeTo contextURL: URL, enforceNetworkPolicy: Bool) -> URL? {
         let value = rawValue
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .yomuhonDecodeJavaScriptEscapes()
@@ -961,25 +969,32 @@ struct DeclarativeSourceRuntime: Source {
         }
 
         guard let url else { return nil }
-        if enforceAllowedHost, !isAllowedHost(url.host) { return nil }
+        if enforceNetworkPolicy {
+            guard DeclarativeNetworkURLPolicy.permits(url) else { return nil }
+            traceUnexpectedHost(url, context: "resolved URL")
+        }
         return url
     }
 
     private func validateAllowedURL(_ url: URL) throws {
-        guard url.scheme?.lowercased() == "https", isAllowedHost(url.host) else {
+        guard DeclarativeNetworkURLPolicy.permits(url) else {
             throw DeclarativeSourceError.invalidURL(url.absoluteString)
         }
+        traceUnexpectedHost(url, context: "document")
     }
 
-    private func isAllowedHost(_ host: String?) -> Bool {
-        guard let host = host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) else {
-            return false
+    private func traceUnexpectedHost(_ url: URL, context: String) {
+        guard !DeclarativeNetworkURLPolicy.isExpectedHost(
+            url.host,
+            allowedDomains: config.allowedDomains
+        ) else {
+            return
         }
 
-        return config.allowedDomains.contains { allowedDomain in
-            let allowed = allowedDomain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            return host == allowed || host.hasSuffix(".\(allowed)")
-        }
+        SourceDebugTrace.log(
+            "Runtime",
+            "source=\(id) UNEXPECTED_PUBLIC_HOST context=\(context) host=\(url.host ?? "nil")"
+        )
     }
 }
 
@@ -1173,12 +1188,14 @@ private struct JSONAPISourceExecutor {
                let relationships = JSONPath.value("relationships", in: item) as? [Any],
                let relation = relationships.first(where: { JSONPath.string("type", in: $0) == type }),
                let file = JSONPath.string(filePath, in: relation) {
-                coverURL = URL(
+                if let candidate = URL(
                     string: expand(
                         template,
                         variables: variables.merging(["mangaID": id, "value": file]) { _, new in new }
                     )
-                )
+                ) {
+                    coverURL = permittedPublicURL(candidate, context: "cover")
+                }
             }
             return Manga(
                 id: id,
@@ -1275,7 +1292,20 @@ private struct JSONAPISourceExecutor {
         let root = try load(operation.request, variables: ["chapterID": chapter.id, "mangaID": manga.id])
         guard let base = JSONPath.string(operation.baseURLPath, in: root), let hash = JSONPath.string(operation.hashPath, in: root) else { throw DeclarativeSourceError.invalidResponse }
         let items = JSONPath.value(operation.itemsPath, in: root) as? [Any] ?? []
-        let urls = items.compactMap { ($0 as? String).flatMap { URL(string: expand(operation.urlTemplate, variables: ["baseURL": base, "hash": hash, "item": $0])) } }
+        let urls = items.compactMap { item -> URL? in
+            guard let item = item as? String,
+                  let candidate = URL(
+                    string: expand(
+                        operation.urlTemplate,
+                        variables: ["baseURL": base, "hash": hash, "item": item]
+                    )
+                  )
+            else {
+                return nil
+            }
+
+            return permittedPublicURL(candidate, context: "page")
+        }
         guard !urls.isEmpty else { throw DeclarativeSourceError.noResults("pages") }
         return urls.enumerated().map { Page(id: "\(chapter.id)-\($0.offset)", index: $0.offset, imageURL: $0.element, localFileURL: nil) }
     }
@@ -1301,16 +1331,37 @@ private struct JSONAPISourceExecutor {
             }
         }
         components.queryItems = queryItems
-        guard let url = components.url, isAllowed(url) else { throw DeclarativeSourceError.invalidURL(components.url?.absoluteString ?? path) }
+        guard let candidate = components.url,
+              let url = permittedPublicURL(candidate, context: "api request")
+        else {
+            throw DeclarativeSourceError.invalidURL(components.url?.absoluteString ?? path)
+        }
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = request.method ?? "GET"
         for (key, value) in config.network?.headers ?? [:] { urlRequest.setValue(value, forHTTPHeaderField: key) }
         return try JSONSerialization.jsonObject(with: dataLoader(urlRequest))
     }
 
-    private func isAllowed(_ url: URL) -> Bool {
-        guard let host = url.host?.lowercased() else { return false }
-        return config.allowedDomains.contains { host == $0.lowercased() || host.hasSuffix("." + $0.lowercased()) }
+    private func permittedPublicURL(_ url: URL, context: String) -> URL? {
+        guard DeclarativeNetworkURLPolicy.permits(url) else {
+            SourceDebugTrace.log(
+                "Runtime",
+                "source=\(config.id) BLOCKED_NON_PUBLIC_URL context=\(context) url=\(url.absoluteString)"
+            )
+            return nil
+        }
+
+        if !DeclarativeNetworkURLPolicy.isExpectedHost(
+            url.host,
+            allowedDomains: config.allowedDomains
+        ) {
+            SourceDebugTrace.log(
+                "Runtime",
+                "source=\(config.id) UNEXPECTED_PUBLIC_HOST context=\(context) host=\(url.host ?? "nil")"
+            )
+        }
+
+        return url
     }
 
     private func expand(_ template: String, variables: [String: String]) -> String {

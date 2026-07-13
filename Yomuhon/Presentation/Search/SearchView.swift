@@ -54,9 +54,10 @@ struct SearchView: View {
                 viewModel.reloadDiscoveryForSourceCatalogChange()
             }
         }
-        .animation(theme.animation, value: viewModel.results)
+        // Progressive sources can publish several result batches within a few
+        // milliseconds. Animating the whole result tree for every batch makes
+        // typing feel like the UI stalls even though network work is healthy.
         .animation(theme.animation, value: viewModel.isSearching)
-        .animation(theme.animation, value: viewModel.query)
     }
 
     @ViewBuilder
@@ -673,7 +674,9 @@ struct SearchView: View {
         }
 
         pendingSearch = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
+        // Keep enough debounce to avoid firing on every keystroke while making
+        // Search acknowledge a pause noticeably faster than the old 250 ms.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: workItem)
     }
 }
 

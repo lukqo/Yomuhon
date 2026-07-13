@@ -20,10 +20,10 @@ struct ReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var controlsAutoHideWorkItem: DispatchWorkItem?
     @State private var showsQuickMenu = false
-    @State private var readerViewportWidth: CGFloat = 0
     @State private var readerProgressFrame: CGRect = .zero
     @State private var pencilHoverLocation: CGPoint?
     @State private var pencilHoverPageIndex: Int?
+    @State private var isPencilScrubbing = false
     #if os(macOS)
     @State private var keyboardMonitor: Any?
     #endif
@@ -44,6 +44,8 @@ struct ReaderView: View {
                 ApplePencilReaderInteractionView(
                     onHoverChanged: handlePencilHoverChanged,
                     onPencilTap: handlePencilTap,
+                    onPencilPanChanged: handlePencilPanChanged,
+                    onPencilPanEnded: handlePencilPanEnded,
                     onPencilDoubleTap: handlePencilDoubleTap
                 )
                 .frame(width: 0, height: 0)
@@ -72,6 +74,18 @@ struct ReaderView: View {
                 chapterTransitionToast(message)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
+
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .pad,
+               viewModel.readingMode == .paged,
+               viewModel.showsControls,
+               let location = pencilHoverLocation,
+               let label = pencilProgressLabel,
+               isPencilScrubbing || readerProgressFrame.contains(location) {
+                pencilProgressBubble(label, at: location)
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+            }
+            #endif
         }
         .accessibilityIdentifier(readerContentAccessibilityIdentifier)
         .onAppear {
@@ -96,7 +110,9 @@ struct ReaderView: View {
                 scheduleControlsAutoHide()
             } else {
                 readerProgressFrame = .zero
+                pencilHoverLocation = nil
                 pencilHoverPageIndex = nil
+                isPencilScrubbing = false
                 cancelControlsAutoHide()
             }
         }
@@ -113,7 +129,9 @@ struct ReaderView: View {
         }
         .onChange(of: viewModel.readingMode) { newMode in
             if newMode != .paged {
+                pencilHoverLocation = nil
                 pencilHoverPageIndex = nil
+                isPencilScrubbing = false
                 readerProgressFrame = .zero
             }
             viewModel.handleReaderPositionChanged()
@@ -156,80 +174,36 @@ struct ReaderView: View {
                     pageTurnZone(isEnabled: viewModel.canGoForward, action: goForward)
                 }
             }
-            .onAppear {
-                readerViewportWidth = proxy.size.width
-            }
-            .onChange(of: proxy.size.width) { newWidth in
-                readerViewportWidth = newWidth
-            }
         }
-    }
-
-    private var usesDoublePageSpread: Bool {
-        viewModel.readingMode == .paged
-            && viewModel.isDoublePageEnabled
-            && viewModel.fitMode != .fitWidth
-            && readerViewportWidth >= 900
-    }
-
-    private var pageAdvanceStep: Int {
-        usesDoublePageSpread ? 2 : 1
     }
 
     @ViewBuilder
     private func pagedPageCanvas(proxy: GeometryProxy) -> some View {
-        if usesDoublePageSpread {
-            HStack(spacing: 2) {
-                PageCanvas(
-                    page: viewModel.currentPage,
-                    title: viewModel.chapterTitle,
-                    fitMode: .fitPage,
-                    sourceID: viewModel.manga.sourceID,
-                    refererURL: viewModel.pageRefererURL
+        switch viewModel.fitMode {
+        case .fitPage:
+            PageCanvas(page: viewModel.currentPage, title: viewModel.chapterTitle, fitMode: .fitPage, sourceID: viewModel.manga.sourceID, refererURL: viewModel.pageRefererURL)
+                .frame(
+                    width: safePositiveDimension(proxy.size.width, fallback: YomuhonLayout.readerPageMaxWidth),
+                    height: safePositiveDimension(proxy.size.height, fallback: YomuhonLayout.readerPageMaxHeight)
                 )
+                .padding(.horizontal, YomuhonSpacing.small)
 
-                if let nextPage = viewModel.page(at: viewModel.currentPageIndex + 1) {
-                    PageCanvas(
-                        page: nextPage,
-                        title: viewModel.chapterTitle,
-                        fitMode: .fitPage,
-                        sourceID: viewModel.manga.sourceID,
-                        refererURL: viewModel.pageRefererURL
-                    )
-                }
-            }
-            .frame(
-                width: safePositiveDimension(proxy.size.width, fallback: YomuhonLayout.readerPageMaxWidth * 1.6),
-                height: safePositiveDimension(proxy.size.height, fallback: YomuhonLayout.readerPageMaxHeight)
-            )
-            .padding(.horizontal, YomuhonSpacing.small)
-        } else {
-            switch viewModel.fitMode {
-            case .fitPage:
-                PageCanvas(page: viewModel.currentPage, title: viewModel.chapterTitle, fitMode: .fitPage, sourceID: viewModel.manga.sourceID, refererURL: viewModel.pageRefererURL)
+        case .fitWidth:
+            ScrollView(.vertical, showsIndicators: false) {
+                PageCanvas(page: viewModel.currentPage, title: viewModel.chapterTitle, fitMode: .fitWidth, sourceID: viewModel.manga.sourceID, refererURL: viewModel.pageRefererURL)
                     .frame(
-                        width: safePositiveDimension(proxy.size.width, fallback: YomuhonLayout.readerPageMaxWidth),
-                        height: safePositiveDimension(proxy.size.height, fallback: YomuhonLayout.readerPageMaxHeight)
+                        width: safePositiveDimension(proxy.size.width - 36, fallback: YomuhonLayout.readerPageMaxWidth),
+                        height: safePositiveDimension(proxy.size.height * 1.55, fallback: YomuhonLayout.readerPageMaxHeight * 1.35)
                     )
-                    .padding(.horizontal, YomuhonSpacing.small)
-
-            case .fitWidth:
-                ScrollView(.vertical, showsIndicators: false) {
-                    PageCanvas(page: viewModel.currentPage, title: viewModel.chapterTitle, fitMode: .fitWidth, sourceID: viewModel.manga.sourceID, refererURL: viewModel.pageRefererURL)
-                        .frame(
-                            width: safePositiveDimension(proxy.size.width - 36, fallback: YomuhonLayout.readerPageMaxWidth),
-                            height: safePositiveDimension(proxy.size.height * 1.55, fallback: YomuhonLayout.readerPageMaxHeight * 1.35)
-                        )
-                        .padding(.vertical, YomuhonSpacing.medium)
-                }
-
-            case .fitHeight:
-                PageCanvas(page: viewModel.currentPage, title: viewModel.chapterTitle, fitMode: .fitHeight, sourceID: viewModel.manga.sourceID, refererURL: viewModel.pageRefererURL)
-                    .frame(
-                        width: safePositiveDimension(proxy.size.width * 0.56, fallback: YomuhonLayout.readerPageMaxWidth * 0.56),
-                        height: safePositiveDimension(proxy.size.height, fallback: YomuhonLayout.readerPageMaxHeight)
-                    )
+                    .padding(.vertical, YomuhonSpacing.medium)
             }
+
+        case .fitHeight:
+            PageCanvas(page: viewModel.currentPage, title: viewModel.chapterTitle, fitMode: .fitHeight, sourceID: viewModel.manga.sourceID, refererURL: viewModel.pageRefererURL)
+                .frame(
+                    width: safePositiveDimension(proxy.size.width * 0.56, fallback: YomuhonLayout.readerPageMaxWidth * 0.56),
+                    height: safePositiveDimension(proxy.size.height, fallback: YomuhonLayout.readerPageMaxHeight)
+                )
         }
     }
 
@@ -250,6 +224,25 @@ struct ReaderView: View {
         }
         .id(viewModel.readingMode)
     }
+
+    #if os(iOS)
+    private func pencilProgressBubble(_ label: String, at location: CGPoint) -> some View {
+        Text(label)
+            .font(YomuhonTypography.captionMedium)
+            .foregroundColor(viewModel.isDarkHUDEnabled ? Color.white.opacity(0.94) : Color.black.opacity(0.86))
+            .padding(.horizontal, YomuhonSpacing.medium)
+            .padding(.vertical, 7)
+            .background(viewModel.isDarkHUDEnabled ? Color.black.opacity(0.78) : Color.white.opacity(0.92))
+            .overlay(
+                Capsule()
+                    .strokeBorder(viewModel.isDarkHUDEnabled ? Color.white.opacity(0.14) : Color.black.opacity(0.10), lineWidth: 1)
+            )
+            .clipShape(Capsule())
+            .shadow(color: Color.black.opacity(0.24), radius: 12, x: 0, y: 6)
+            .position(x: location.x, y: max(location.y - 34, 24))
+            .allowsHitTesting(false)
+    }
+    #endif
 
     private func chapterTransitionToast(_ message: String) -> some View {
         Text(message)
@@ -273,7 +266,7 @@ struct ReaderView: View {
                 subtitle: viewModel.chapterTitle,
                 progress: viewModel.progress,
                 progressLabel: viewModel.readingMode == .paged ? viewModel.pageLabel : nil,
-                hoverProgressLabel: pencilProgressLabel,
+                hoverProgressLabel: nil,
                 showsBottomControls: viewModel.readingMode == .paged,
                 closeAction: closeReader,
                 isDark: viewModel.isDarkHUDEnabled
@@ -342,13 +335,6 @@ struct ReaderView: View {
                 viewModel.handleReadingModeChange(.webtoon)
                 revealControls()
             }
-
-            quickMenuChip(icon: "rectangle.split.2x1", title: "reader.mode.doublePage", selected: viewModel.isDoublePageEnabled) {
-                viewModel.toggleDoublePageMode()
-                revealControls()
-            }
-            .disabled(viewModel.readingMode != .paged)
-            .opacity(viewModel.readingMode == .paged ? 1 : 0.42)
 
             Divider()
                 .frame(height: 28)
@@ -502,12 +488,12 @@ struct ReaderView: View {
     }
 
     private func goBackward() {
-        viewModel.goBackward(pageStep: pageAdvanceStep)
+        viewModel.goBackward()
         revealControls()
     }
 
     private func goForward() {
-        viewModel.goForward(pageStep: pageAdvanceStep)
+        viewModel.goForward()
         revealControls()
     }
 
@@ -529,8 +515,10 @@ struct ReaderView: View {
         }
 
         return String.localizedStringWithFormat(
-            NSLocalizedString("reader.pageNumberFormat", comment: ""),
-            pageIndex + 1
+            NSLocalizedString("reader.pencilProgressFormat", comment: ""),
+            viewModel.chapterTitle,
+            pageIndex + 1,
+            viewModel.pages.count
         )
     }
 
@@ -538,14 +526,19 @@ struct ReaderView: View {
         guard viewModel.readingMode == .paged,
               viewModel.showsControls,
               let location = pencilHoverLocation,
-              readerProgressFrame.width > 0,
-              readerProgressFrame.contains(location)
+              readerProgressFrame.width > 0
         else {
             pencilHoverPageIndex = nil
             return
         }
 
-        let rawFraction = Double((location.x - readerProgressFrame.minX) / readerProgressFrame.width)
+        if !isPencilScrubbing, !readerProgressFrame.contains(location) {
+            pencilHoverPageIndex = nil
+            return
+        }
+
+        let clampedX = min(max(location.x, readerProgressFrame.minX), readerProgressFrame.maxX)
+        let rawFraction = Double((clampedX - readerProgressFrame.minX) / readerProgressFrame.width)
         pencilHoverPageIndex = ReaderViewModel.pageIndex(
             forProgressFraction: rawFraction,
             pageCount: viewModel.pages.count
@@ -554,7 +547,7 @@ struct ReaderView: View {
 
     #if os(iOS)
     private func handlePencilHoverChanged(isHovering: Bool, location: CGPoint?) {
-        guard UIDevice.current.userInterfaceIdiom == .pad else { return }
+        guard UIDevice.current.userInterfaceIdiom == .pad, !isPencilScrubbing else { return }
 
         pencilHoverLocation = isHovering ? location : nil
         updatePencilHoverPageIndex()
@@ -587,6 +580,70 @@ struct ReaderView: View {
         viewModel.jumpToPage(at: pageIndex)
         pencilHoverPageIndex = pageIndex
         revealControls()
+    }
+
+    private func handlePencilPanChanged(from startLocation: CGPoint, to location: CGPoint) {
+        guard UIDevice.current.userInterfaceIdiom == .pad,
+              viewModel.readingMode == .paged,
+              viewModel.showsControls,
+              readerProgressFrame.width > 0,
+              readerProgressFrame.contains(startLocation)
+        else {
+            return
+        }
+
+        isPencilScrubbing = true
+        pencilHoverLocation = location
+        let clampedX = min(max(location.x, readerProgressFrame.minX), readerProgressFrame.maxX)
+        let rawFraction = Double((clampedX - readerProgressFrame.minX) / readerProgressFrame.width)
+        pencilHoverPageIndex = ReaderViewModel.pageIndex(
+            forProgressFraction: rawFraction,
+            pageCount: viewModel.pages.count
+        )
+        cancelControlsAutoHide()
+    }
+
+    private func handlePencilPanEnded(from startLocation: CGPoint, to location: CGPoint) {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { return }
+
+        defer {
+            isPencilScrubbing = false
+            pencilHoverLocation = nil
+            scheduleControlsAutoHide()
+        }
+
+        if viewModel.readingMode == .paged,
+           viewModel.showsControls,
+           readerProgressFrame.width > 0,
+           readerProgressFrame.contains(startLocation) {
+            let clampedX = min(max(location.x, readerProgressFrame.minX), readerProgressFrame.maxX)
+            let rawFraction = Double((clampedX - readerProgressFrame.minX) / readerProgressFrame.width)
+            if let pageIndex = ReaderViewModel.pageIndex(
+                forProgressFraction: rawFraction,
+                pageCount: viewModel.pages.count
+            ) {
+                viewModel.jumpToPage(at: pageIndex)
+                pencilHoverPageIndex = pageIndex
+                revealControls()
+            }
+            return
+        }
+
+        guard viewModel.readingMode == .paged else { return }
+
+        let horizontalDelta = location.x - startLocation.x
+        let verticalDelta = location.y - startLocation.y
+        guard abs(horizontalDelta) >= 44,
+              abs(horizontalDelta) > abs(verticalDelta) * 1.25
+        else {
+            return
+        }
+
+        if horizontalDelta < 0 {
+            goForward()
+        } else {
+            goBackward()
+        }
     }
 
     private func handlePencilDoubleTap() {
@@ -632,7 +689,7 @@ struct ReaderView: View {
 
     private func prefetchNearbyPages() {
         ReaderImageDataCache.shared.prefetch(
-            pages: viewModel.pagesToPrefetch(radius: usesDoublePageSpread ? 3 : 2),
+            pages: viewModel.pagesToPrefetch(radius: 2),
             sourceID: viewModel.manga.sourceID,
             refererURL: viewModel.pageRefererURL
         )
@@ -685,12 +742,16 @@ struct ReaderView: View {
 private struct ApplePencilReaderInteractionView: UIViewRepresentable {
     let onHoverChanged: (Bool, CGPoint?) -> Void
     let onPencilTap: (CGPoint) -> Void
+    let onPencilPanChanged: (CGPoint, CGPoint) -> Void
+    let onPencilPanEnded: (CGPoint, CGPoint) -> Void
     let onPencilDoubleTap: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
             onHoverChanged: onHoverChanged,
             onPencilTap: onPencilTap,
+            onPencilPanChanged: onPencilPanChanged,
+            onPencilPanEnded: onPencilPanEnded,
             onPencilDoubleTap: onPencilDoubleTap
         )
     }
@@ -706,6 +767,8 @@ private struct ApplePencilReaderInteractionView: UIViewRepresentable {
     func updateUIView(_ uiView: AttachmentView, context: Context) {
         context.coordinator.onHoverChanged = onHoverChanged
         context.coordinator.onPencilTap = onPencilTap
+        context.coordinator.onPencilPanChanged = onPencilPanChanged
+        context.coordinator.onPencilPanEnded = onPencilPanEnded
         context.coordinator.onPencilDoubleTap = onPencilDoubleTap
         context.coordinator.attachIfNeeded(to: uiView.window)
     }
@@ -723,23 +786,31 @@ private struct ApplePencilReaderInteractionView: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, UIPencilInteractionDelegate {
+    final class Coordinator: NSObject, UIPencilInteractionDelegate, UIGestureRecognizerDelegate {
         var onHoverChanged: (Bool, CGPoint?) -> Void
         var onPencilTap: (CGPoint) -> Void
+        var onPencilPanChanged: (CGPoint, CGPoint) -> Void
+        var onPencilPanEnded: (CGPoint, CGPoint) -> Void
         var onPencilDoubleTap: () -> Void
 
         private weak var attachedView: UIView?
         private var pencilInteraction: UIPencilInteraction?
         private var hoverRecognizer: UIHoverGestureRecognizer?
         private var tapRecognizer: UITapGestureRecognizer?
+        private var panRecognizer: UIPanGestureRecognizer?
+        private var panStartLocation: CGPoint?
 
         init(
             onHoverChanged: @escaping (Bool, CGPoint?) -> Void,
             onPencilTap: @escaping (CGPoint) -> Void,
+            onPencilPanChanged: @escaping (CGPoint, CGPoint) -> Void,
+            onPencilPanEnded: @escaping (CGPoint, CGPoint) -> Void,
             onPencilDoubleTap: @escaping () -> Void
         ) {
             self.onHoverChanged = onHoverChanged
             self.onPencilTap = onPencilTap
+            self.onPencilPanChanged = onPencilPanChanged
+            self.onPencilPanEnded = onPencilPanEnded
             self.onPencilDoubleTap = onPencilDoubleTap
         }
 
@@ -766,6 +837,13 @@ private struct ApplePencilReaderInteractionView: UIViewRepresentable {
             tapRecognizer.cancelsTouchesInView = false
             view.addGestureRecognizer(tapRecognizer)
             self.tapRecognizer = tapRecognizer
+
+            let panRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+            panRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+            panRecognizer.cancelsTouchesInView = false
+            panRecognizer.delegate = self
+            view.addGestureRecognizer(panRecognizer)
+            self.panRecognizer = panRecognizer
         }
 
         func detach() {
@@ -778,11 +856,16 @@ private struct ApplePencilReaderInteractionView: UIViewRepresentable {
             if let attachedView, let tapRecognizer {
                 attachedView.removeGestureRecognizer(tapRecognizer)
             }
+            if let attachedView, let panRecognizer {
+                attachedView.removeGestureRecognizer(panRecognizer)
+            }
 
             attachedView = nil
             pencilInteraction = nil
             hoverRecognizer = nil
             tapRecognizer = nil
+            panRecognizer = nil
+            panStartLocation = nil
         }
 
         func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
@@ -808,6 +891,32 @@ private struct ApplePencilReaderInteractionView: UIViewRepresentable {
         @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard recognizer.state == .ended, let attachedView else { return }
             onPencilTap(recognizer.location(in: attachedView))
+        }
+
+        @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            guard let attachedView else { return }
+            let location = recognizer.location(in: attachedView)
+
+            switch recognizer.state {
+            case .began:
+                panStartLocation = location
+            case .changed:
+                guard let panStartLocation else { return }
+                onPencilPanChanged(panStartLocation, location)
+            case .ended, .cancelled, .failed:
+                guard let panStartLocation else { return }
+                onPencilPanEnded(panStartLocation, location)
+                self.panStartLocation = nil
+            default:
+                break
+            }
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
         }
     }
 }

@@ -94,6 +94,7 @@
 "reader.page.loading" = "Cargando página";
 "reader.page.unavailable" = "Página no disponible";
 "reader.pageNumberFormat" = "Página %lld";
+"reader.pencilProgressFormat" = "%@ · Página %lld de %lld";
 "reader.pages.loading" = "Cargando páginas";
 "reader.pages.loading.message" = "Preparando el capítulo...";
 "reader.pages.error.title" = "No se pudieron cargar las páginas";
@@ -436,7 +437,6 @@
 "sources.product.debug.message" = "Las herramientas de diagnóstico solo aparecen en builds de desarrollo.";
 "search.progress.sources" = "%lld de %lld fuentes revisadas";
 
-"reader.mode.doublePage" = "Dos páginas";
 
 "settings.reading.defaultMode" = "Modo de lectura por defecto";
 "settings.reading.defaultMode.subtitle" = "Se usa la primera vez que abres un manga. Después, cada manga puede recordar su propio modo.";

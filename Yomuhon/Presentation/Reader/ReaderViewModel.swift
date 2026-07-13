@@ -22,7 +22,6 @@ final class ReaderViewModel: ObservableObject {
     @Published var showsControls = true
     @Published var readingMode: ReadingMode = .paged
     @Published var fitMode: ReaderFitMode = .fitPage
-    @Published var isDoublePageEnabled = false
     @Published var isDarkHUDEnabled = true
     @Published private(set) var chapterTransitionMessage: String?
     @Published private(set) var isAtEndOfSeries = false
@@ -55,7 +54,6 @@ final class ReaderViewModel: ObservableObject {
         self.sourceRepository = sourceRepository
         self.readingMode = Self.storedReadingMode()
         self.fitMode = Self.storedFitMode()
-        self.isDoublePageEnabled = Self.storedDoublePageMode()
         self.isDarkHUDEnabled = Self.storedDarkHUD()
     }
 
@@ -80,10 +78,6 @@ final class ReaderViewModel: ObservableObject {
         }
 
         return pages[currentPageIndex]
-    }
-
-    func page(at index: Int) -> Page? {
-        pages.indices.contains(index) ? pages[index] : nil
     }
 
     static func pageIndex(forProgressFraction fraction: Double, pageCount: Int) -> Int? {
@@ -285,12 +279,6 @@ final class ReaderViewModel: ObservableObject {
     func setFitMode(_ mode: ReaderFitMode) {
         fitMode = mode
         Self.storeFitMode(mode)
-        showsControls = true
-    }
-
-    func toggleDoublePageMode() {
-        isDoublePageEnabled.toggle()
-        Self.storeDoublePageMode(isDoublePageEnabled)
         showsControls = true
     }
 
@@ -528,7 +516,6 @@ final class ReaderViewModel: ObservableObject {
         }
     }
 
-    private static let globalDoublePageKey = "reader.doublePage.global"
     private static let darkHUDKey = "reader.darkHUD.global"
 
     private static func storedReadingMode() -> ReadingMode {
@@ -547,14 +534,6 @@ final class ReaderViewModel: ObservableObject {
 
     private static func storeFitMode(_ mode: ReaderFitMode) {
         UserDefaults.standard.set(mode.rawValue, forKey: ReaderPreferenceKeys.defaultFitMode)
-    }
-
-    private static func storedDoublePageMode() -> Bool {
-        UserDefaults.standard.bool(forKey: globalDoublePageKey)
-    }
-
-    private static func storeDoublePageMode(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: globalDoublePageKey)
     }
 
     private static func storedDarkHUD() -> Bool {

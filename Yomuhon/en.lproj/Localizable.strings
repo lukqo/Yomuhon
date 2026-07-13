@@ -94,6 +94,7 @@
 "reader.page.loading" = "Loading page";
 "reader.page.unavailable" = "Page unavailable";
 "reader.pageNumberFormat" = "Page %lld";
+"reader.pencilProgressFormat" = "%@ · Page %lld of %lld";
 "reader.pages.loading" = "Loading pages";
 "reader.pages.loading.message" = "Preparing the chapter...";
 "reader.pages.error.title" = "Could not load pages";
@@ -435,7 +436,6 @@
 "sources.product.debug.message" = "Diagnostic tools are visible only in development builds.";
 "search.progress.sources" = "%lld of %lld sources checked";
 
-"reader.mode.doublePage" = "Two pages";
 
 "settings.reading.defaultMode" = "Default reading mode";
 "settings.reading.defaultMode.subtitle" = "Used the first time you open a manga. Each manga can remember its own mode afterward.";

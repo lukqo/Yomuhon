@@ -32,6 +32,9 @@ It intentionally does not record every compile fix or one-line patch.
 - Added source-family badge deduplication.
 - Added manga intake cleanup for placeholder titles and duplicate candidates.
 - Added metadata enrichment for missing covers and synopsis without replacing the reading source.
+- Removed whole-result implicit animations during progressive search updates.
+- Cached grouped and ranked Search presentation per result revision to avoid repeated clustering in one render pass.
+- Reduced the Search typing debounce from 250 ms to 160 ms while preserving cancellation of obsolete requests.
 
 ### Reader
 
@@ -42,6 +45,9 @@ It intentionally does not record every compile fix or one-line patch.
 - Added global dark HUD preference.
 - Added keyboard navigation on macOS.
 - Improved HUD stability and auto-hide behavior.
+- Removed the hidden/conditional two-page layout so Pages always advances one page at a time.
+- Added Apple Pencil progress scrubbing: hover previews chapter/page, drag previews continuously, and release jumps to the selected page.
+- Added horizontal Apple Pencil swipes for next/previous page in Pages mode without interfering with vertical Webtoon scrolling.
 
 ### Downloads
 

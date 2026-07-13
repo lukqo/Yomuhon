@@ -1323,7 +1323,7 @@ final class YomuhonTests: XCTestCase {
         XCTAssertEqual(counter.value, 3)
     }
 
-    func testDeclarativeRuntimeRejectsImageHostMissingFromAllowedDomains() throws {
+    func testDeclarativeRuntimeAllowsUnexpectedPublicImageHost() throws {
         var configObject = try XCTUnwrap(
             JSONSerialization.jsonObject(
                 with: Data(TestSourceFixtures.mangaPillJSON.utf8)
@@ -1361,7 +1361,49 @@ final class YomuhonTests: XCTestCase {
         let chapter = try XCTUnwrap(detailed.chapters.first)
         let pages = try source.fetchPages(for: chapter, manga: detailed)
 
-        XCTAssertTrue(pages.isEmpty)
+        XCTAssertEqual(pages.count, 1)
+        XCTAssertEqual(pages.first?.imageURL?.host, "cdn.readdetectiveconan.com")
+    }
+
+    func testDeclarativeNetworkPolicyAllowsPublicHTTPSAndDynamicCDNs() throws {
+        let dynamicCDN = try XCTUnwrap(URL(string: "https://cdxmd98sb0x3yprd.mangadex.network/data/page.jpg"))
+        let unexpectedPublicCDN = try XCTUnwrap(URL(string: "https://images.example.net/page.webp"))
+
+        XCTAssertTrue(DeclarativeNetworkURLPolicy.permits(dynamicCDN))
+        XCTAssertTrue(
+            DeclarativeNetworkURLPolicy.isExpectedHost(
+                dynamicCDN.host,
+                allowedDomains: ["mangadex.network"]
+            )
+        )
+
+        XCTAssertTrue(DeclarativeNetworkURLPolicy.permits(unexpectedPublicCDN))
+        XCTAssertFalse(
+            DeclarativeNetworkURLPolicy.isExpectedHost(
+                unexpectedPublicCDN.host,
+                allowedDomains: ["mangadex.network"]
+            )
+        )
+    }
+
+    func testDeclarativeNetworkPolicyBlocksLocalPrivateAndNonHTTPSURLs() throws {
+        let blockedValues = [
+            "https://localhost/page.jpg",
+            "https://reader.local/page.jpg",
+            "https://127.0.0.1/page.jpg",
+            "https://10.0.0.1/page.jpg",
+            "https://172.16.0.1/page.jpg",
+            "https://192.168.1.1/page.jpg",
+            "https://169.254.169.254/latest/meta-data/",
+            "https://[::1]/page.jpg",
+            "https://[fd00::1]/page.jpg",
+            "http://example.com/page.jpg"
+        ]
+
+        for value in blockedValues {
+            let url = try XCTUnwrap(URL(string: value), value)
+            XCTAssertFalse(DeclarativeNetworkURLPolicy.permits(url), value)
+        }
     }
 
     func testRemoteConfigValidatorRejectsVersionAndDomainMismatch() throws {

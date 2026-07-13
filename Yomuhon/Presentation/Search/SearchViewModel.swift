@@ -152,6 +152,18 @@ final class SearchViewModel: ObservableObject {
     private var popularStableOrder: [String] = []
     private var genreStableOrder: [String] = []
 
+    // SwiftUI asks several search-derived properties during one body pass.
+    // Grouping previously repeated identity clustering and ranking each time.
+    // Cache the groups for the current search presentation revision instead.
+    private struct SearchGroupingCacheKey: Hashable {
+        let revision: Int
+        let query: String
+        let mangaKeys: [String]
+    }
+
+    private var searchPresentationRevision = 0
+    private var groupedMangaCache: [SearchGroupingCacheKey: [MangaSearchGroup]] = [:]
+
     init(searchMangaUseCase: SearchMangaUseCase) {
         self.searchMangaUseCase = searchMangaUseCase
         refreshSourceAvailability()
@@ -228,22 +240,44 @@ final class SearchViewModel: ObservableObject {
     }
 
     private func groupedMangas(from mangas: [Manga]) -> [MangaSearchGroup] {
-        let ranked = rankedMangaGroups(from: mangas)
-        guard !stableSearchGroupOrder.isEmpty else { return ranked }
-
-        let stablePositions = Dictionary(
-            uniqueKeysWithValues: stableSearchGroupOrder.enumerated().map { ($0.element, $0.offset) }
-        )
-        let rankedPositions = Dictionary(
-            uniqueKeysWithValues: ranked.enumerated().map { ($0.element.id, $0.offset) }
+        let cacheKey = SearchGroupingCacheKey(
+            revision: searchPresentationRevision,
+            query: trimmedQuery,
+            mangaKeys: mangas.map { "\($0.sourceID)|\($0.id)" }.sorted()
         )
 
-        return ranked.sorted { lhs, rhs in
-            let lhsPosition = stablePositions[lhs.id] ?? rankedPositions[lhs.id] ?? Int.max
-            let rhsPosition = stablePositions[rhs.id] ?? rankedPositions[rhs.id] ?? Int.max
-            if lhsPosition != rhsPosition { return lhsPosition < rhsPosition }
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        if let cached = groupedMangaCache[cacheKey] {
+            return cached
         }
+
+        let ranked = rankedMangaGroups(from: mangas)
+        let grouped: [MangaSearchGroup]
+
+        if stableSearchGroupOrder.isEmpty {
+            grouped = ranked
+        } else {
+            let stablePositions = Dictionary(
+                uniqueKeysWithValues: stableSearchGroupOrder.enumerated().map { ($0.element, $0.offset) }
+            )
+            let rankedPositions = Dictionary(
+                uniqueKeysWithValues: ranked.enumerated().map { ($0.element.id, $0.offset) }
+            )
+
+            grouped = ranked.sorted { lhs, rhs in
+                let lhsPosition = stablePositions[lhs.id] ?? rankedPositions[lhs.id] ?? Int.max
+                let rhsPosition = stablePositions[rhs.id] ?? rankedPositions[rhs.id] ?? Int.max
+                if lhsPosition != rhsPosition { return lhsPosition < rhsPosition }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+        }
+
+        groupedMangaCache[cacheKey] = grouped
+        return grouped
+    }
+
+    private func invalidateSearchPresentation() {
+        searchPresentationRevision &+= 1
+        groupedMangaCache.removeAll(keepingCapacity: true)
     }
 
     private func rankedMangaGroups(from mangas: [Manga]) -> [MangaSearchGroup] {
@@ -313,6 +347,7 @@ final class SearchViewModel: ObservableObject {
             relativePromotionDelta: 0.04,
             settle: settle
         )
+        invalidateSearchPresentation()
     }
 
 
@@ -527,6 +562,7 @@ final class SearchViewModel: ObservableObject {
         let generation = searchGeneration
         let useCase = searchMangaUseCase
 
+        invalidateSearchPresentation()
         results = []
         searchSourcePositions = [:]
         stableSearchGroupOrder = []
@@ -552,6 +588,7 @@ final class SearchViewModel: ObservableObject {
                             return
                         }
 
+                        self.invalidateSearchPresentation()
                         self.searchSourcePositions = Self.mergingSourcePositions(
                             current: self.searchSourcePositions,
                             mangas: progress.mangas,
@@ -578,6 +615,7 @@ final class SearchViewModel: ObservableObject {
 
                 switch result {
                 case .success(let mangas):
+                    self.invalidateSearchPresentation()
                     self.results = mangas
                     self.reconcileSearchOrder(query: currentQuery, settle: true)
                     self.errorMessage = nil
@@ -607,6 +645,7 @@ final class SearchViewModel: ObservableObject {
 
     func reset() {
         cancelSearch()
+        invalidateSearchPresentation()
         results = []
         searchSourcePositions = [:]
         stableSearchGroupOrder = []
