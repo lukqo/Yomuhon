@@ -182,6 +182,42 @@ struct HTTPClient {
     private let timeout: TimeInterval
     private let maximumRetryCount: Int
 
+    // IMPORTANT: never use `URLSession.shared` for this bridge.
+    //
+    // `data(for:)` intentionally blocks its calling thread (via a semaphore)
+    // until the network response arrives, because the rest of the source
+    // runtime (parsing, selectors, etc.) is written synchronously and is
+    // fanned out across several sources concurrently via OperationQueue.
+    //
+    // `URLSession.shared` delivers its completion handlers on GCD's shared
+    // global concurrent queue - the *same* thread pool that ends up full of
+    // our own blocked/parked threads once several sources are searched at
+    // once. Under load, that pool can run out of free threads, so the
+    // response callback itself has nowhere to run, the semaphore never
+    // signals, and every in-flight request (search, discovery, everything)
+    // appears to hang at once, even though nothing is truly deadlocked.
+    //
+    // Giving this session its own dedicated delegate queue guarantees a
+    // thread is always available to deliver the response, regardless of how
+    // many of the app's own worker threads are currently parked.
+    private static let callbackQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "yomuhon.http.callback"
+        queue.qualityOfService = .userInitiated
+        // Generous headroom: search (up to 5 concurrent sources) + discovery
+        // (up to 5) + genre browsing + detail/reader fetches can all be
+        // in flight at once, each needing its own callback thread.
+        queue.maxConcurrentOperationCount = 24
+        return queue
+    }()
+
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.httpMaximumConnectionsPerHost = 6
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration, delegate: nil, delegateQueue: callbackQueue)
+    }()
+
     init(
         timeout: TimeInterval = 20,
         maximumRetryCount: Int = 0
@@ -269,7 +305,7 @@ struct HTTPClient {
         }
         let requestURL = request.url
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = Self.session.dataTask(with: request) { data, response, error in
             defer { semaphore.signal() }
 
             let resolvedResult: Result<Data, Error>

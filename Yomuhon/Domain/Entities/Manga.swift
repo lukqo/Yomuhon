@@ -79,6 +79,19 @@ extension Manga {
             .filter { !$0.isEmpty }
     }
 
+    /// Compact label for a language badge overlay on a cover/poster, e.g.
+    /// "EN" for a single known language or "EN +2" when more are available.
+    /// `nil` when there's no language metadata worth badging.
+    var languageBadgeLabel: String? {
+        guard let primary = availableLanguageCodes.first else { return nil }
+
+        let remaining = availableLanguageCodes.count - 1
+        let primaryCode = primary.yomuhonLanguageBadgeCode
+
+        guard remaining > 0 else { return primaryCode }
+        return "\(primaryCode) +\(remaining)"
+    }
+
     func withAvailableLanguageCodes(_ codes: [String]) -> Manga {
         let uniqueCodes = codes
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }

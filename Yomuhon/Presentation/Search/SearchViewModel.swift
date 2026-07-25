@@ -139,6 +139,8 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var totalSourceCount = 0
 
     private let searchMangaUseCase: SearchMangaUseCase
+    private let processor = SearchProcessor()
+    
     private var searchGeneration = 0
     private var discoveryGeneration = 0
     private var genreGeneration = 0
@@ -580,27 +582,38 @@ final class SearchViewModel: ObservableObject {
                 ) { progress in
                     guard !cancellationToken.isCancelled else { return }
 
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self,
-                              generation == self.searchGeneration,
-                              !cancellationToken.isCancelled
-                        else {
-                            return
-                        }
+                    Task { [weak self] in
+                        guard let self else { return }
 
-                        self.invalidateSearchPresentation()
-                        self.searchSourcePositions = Self.mergingSourcePositions(
-                            current: self.searchSourcePositions,
-                            mangas: progress.mangas,
+                        let processed = await self.processor.process(
+                            current: self.results,
+                            incoming: progress.mangas,
+                            currentPositions: self.searchSourcePositions,
                             progressSourceID: progress.sourceID
                         )
-                        self.completedSourceCount = progress.completedSourceCount
-                        self.totalSourceCount = progress.totalSourceCount
-                        self.results = self.mergingSearchResults(
-                            current: self.results,
-                            incoming: progress.mangas
-                        )
-                        self.reconcileSearchOrder(query: currentQuery, settle: false)
+
+                        await MainActor.run {
+
+                            guard generation == self.searchGeneration,
+                                  !cancellationToken.isCancelled
+                            else {
+                                return
+                            }
+
+                            self.completedSourceCount = progress.completedSourceCount
+                            self.totalSourceCount = progress.totalSourceCount
+
+                            self.invalidateSearchPresentation()
+
+                            self.results = processed.mangas
+                            self.searchSourcePositions = processed.sourcePositions
+
+                            // Temporalmente dejamos esto.
+                            self.reconcileSearchOrder(
+                                query: currentQuery,
+                                settle: false
+                            )
+                        }
                     }
                 }
             }
@@ -902,7 +915,22 @@ enum MangaIdentityResolver {
         return clusters
     }
 
+    // canonicalTokens is a pure function of `title`, but clustering compares
+    // every manga against every existing cluster (and every manga can have
+    // several identityTitles), so without caching this folding+regex work
+    // was being redone repeatedly for the same strings on every progressive
+    // search update. Memoize per-title to turn that into a one-time cost.
+    private static let tokenCacheLock = NSLock()
+    private static var tokenCache: [String: [String]] = [:]
+
     private static func canonicalTokens(for title: String) -> [String] {
+        tokenCacheLock.lock()
+        if let cached = tokenCache[title] {
+            tokenCacheLock.unlock()
+            return cached
+        }
+        tokenCacheLock.unlock()
+
         let normalized = title
             .removingTrailingSourceNumericIdentifier
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
@@ -911,8 +939,19 @@ enum MangaIdentityResolver {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let rawTokens = normalized.split(separator: " ").map(String.init)
-        guard rawTokens.count > 2 else { return rawTokens }
-        return rawTokens.filter { !ignorableDescriptorTokens.contains($0) }
+        let tokens = rawTokens.count > 2
+            ? rawTokens.filter { !ignorableDescriptorTokens.contains($0) }
+            : rawTokens
+
+        tokenCacheLock.lock()
+        // Keep the cache from growing unbounded across a long session.
+        if tokenCache.count > 4_000 {
+            tokenCache.removeAll(keepingCapacity: true)
+        }
+        tokenCache[title] = tokens
+        tokenCacheLock.unlock()
+
+        return tokens
     }
 
     private static func normalizedAuthor(_ author: String?) -> Set<String>? {
@@ -1336,4 +1375,78 @@ private extension Array where Element: Hashable {
 struct SearchSourceFilter: Identifiable, Equatable {
     let id: String
     let title: String
+}
+
+/// Merges progressive per-source search results off the main actor so that
+/// dedup/ranking work doesn't block the UI while results stream in from
+/// multiple sources concurrently.
+private actor SearchProcessor {
+    struct ProcessedSearchResults {
+        let mangas: [Manga]
+        let sourcePositions: [String: Int]
+    }
+
+    func process(
+        current: [Manga],
+        incoming: [Manga],
+        currentPositions: [String: Int],
+        progressSourceID: String
+    ) -> ProcessedSearchResults {
+        ProcessedSearchResults(
+            mangas: Self.mergingSearchResults(current: current, incoming: incoming),
+            sourcePositions: Self.mergingSourcePositions(
+                current: currentPositions,
+                mangas: incoming,
+                progressSourceID: progressSourceID
+            )
+        )
+    }
+
+    private static func mergingSearchResults(current: [Manga], incoming: [Manga]) -> [Manga] {
+        var bestByKey: [String: Manga] = [:]
+
+        for manga in current + incoming {
+            let key = rankingKey(for: manga)
+
+            guard let existing = bestByKey[key] else {
+                bestByKey[key] = manga
+                continue
+            }
+
+            if searchResultRank(for: manga) > searchResultRank(for: existing) {
+                bestByKey[key] = manga
+            }
+        }
+
+        return bestByKey.values.sorted {
+            if $0.crossSourceTitleKey != $1.crossSourceTitleKey {
+                return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+            }
+
+            return searchResultRank(for: $0) > searchResultRank(for: $1)
+        }
+    }
+
+    private static func mergingSourcePositions(
+        current: [String: Int],
+        mangas: [Manga],
+        progressSourceID: String
+    ) -> [String: Int] {
+        guard progressSourceID != "cache", progressSourceID != "all" else {
+            return current
+        }
+
+        var positions = current
+        for (index, manga) in mangas.enumerated() {
+            let key = rankingKey(for: manga)
+            let rank = index + 1
+            if let existing = positions[key] {
+                positions[key] = Swift.min(existing, rank)
+            } else {
+                positions[key] = rank
+            }
+        }
+
+        return positions
+    }
 }

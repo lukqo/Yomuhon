@@ -148,6 +148,16 @@ private final class RemoteCoverImageLoader: ObservableObject {
     @Published var image: Image?
     @Published var isLoading = false
 
+    // Checking the on-disk cache was previously done synchronously on the
+    // main thread (from .onAppear), which meant a burst of visible cover
+    // cells scrolling into view could each block the UI with a file read
+    // and image decode. Do that lookup on a background queue instead.
+    private static let diskCacheQueue = DispatchQueue(
+        label: "com.yomuhon.cover-disk-cache",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
     private var task: URLSessionDataTask?
     private var currentURL: URL?
 
@@ -161,13 +171,23 @@ private final class RemoteCoverImageLoader: ObservableObject {
         isLoading = true
         task?.cancel()
 
-        if let cachedImage = Self.cachedImage(for: url) {
-            image = cachedImage
-            isLoading = false
-            return
-        }
+        Self.diskCacheQueue.async { [weak self] in
+            let cachedImage = Self.cachedImage(for: url)
 
-        load(url: url, referers: Self.referers(for: url))
+            DispatchQueue.main.async {
+                guard let self, self.currentURL == url else {
+                    return
+                }
+
+                if let cachedImage {
+                    self.image = cachedImage
+                    self.isLoading = false
+                    return
+                }
+
+                self.load(url: url, referers: Self.referers(for: url))
+            }
+        }
     }
 
     private func load(url: URL, referers: [String?]) {

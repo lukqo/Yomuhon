@@ -22,11 +22,36 @@ struct LibraryRepositoryImpl: LibraryRepository {
     }
 
     func fetchReadingProgress() -> [ReadingProgress] {
-        let validMangaIDs = Set(fetchLibrary().map { $0.id })
+        let validMangaIDs = fetchValidMangaIDs()
 
         return fetchManagedObjects(entityName: "CDReadingProgress", sortKey: "lastReadAt")
             .compactMap(ReadingProgress.init(managedObject:))
             .filter { validMangaIDs.contains($0.mangaID) }
+    }
+
+    // fetchLibrary() decodes each manga's full chapter list from JSON, which
+    // is wasted work here since we only need id/sourceID to know which
+    // progress rows still point at a manga in the library. Pull just those
+    // two columns instead of materializing full Manga values.
+    private func fetchValidMangaIDs() -> Set<String> {
+        let request = NSFetchRequest<NSDictionary>(entityName: "CDManga")
+        request.resultType = .dictionaryResultType
+        request.propertiesToFetch = ["id", "sourceID"]
+
+        guard let rows = try? context.fetch(request) else {
+            return []
+        }
+
+        return Set(
+            rows.compactMap { row -> String? in
+                guard let id = row["id"] as? String else { return nil }
+                let sourceID = row["sourceID"] as? String
+                guard !Self.isLegacyPreviewSourceID(sourceID), !Self.legacyPreviewMangaIDs.contains(id) else {
+                    return nil
+                }
+                return id
+            }
+        )
     }
 
     func saveManga(_ manga: Manga) {

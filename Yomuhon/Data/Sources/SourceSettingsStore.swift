@@ -151,6 +151,15 @@ extension String {
         let name = Locale.current.localizedString(forLanguageCode: base)
         return name?.capitalized(with: Locale.current) ?? uppercased()
     }
+
+    /// Short uppercase code for compact badges, e.g. "en" -> "EN",
+    /// "pt-br" -> "PT". Unlike `yomuhonLanguageDisplayName`, this never
+    /// depends on the current locale, so it stays stable and short enough
+    /// to sit on a poster overlay.
+    var yomuhonLanguageBadgeCode: String {
+        let base = components(separatedBy: "-").first ?? self
+        return base.uppercased()
+    }
 }
 
 

@@ -157,6 +157,25 @@ struct YomuhonMetadataBlock: View {
     }
 }
 
+/// Compact pill overlay used on cover posters/thumbnails to show the
+/// available reading language(s), e.g. "EN" or "EN +2". Styled to match
+/// the existing dark circular badges (delete/status) used on posters.
+struct YomuhonLanguageBadge: View {
+    let label: String
+    var isCompact: Bool = false
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: isCompact ? 8.5 : 10, weight: .semibold))
+            .foregroundColor(Color.white.opacity(0.94))
+            .lineLimit(1)
+            .padding(.horizontal, isCompact ? 5 : 7)
+            .padding(.vertical, isCompact ? 2.5 : 4)
+            .background(Color.black.opacity(0.62))
+            .clipShape(Capsule())
+    }
+}
+
 struct YomuhonTag: View {
     let title: LocalizedStringKey
     var systemImage: String?

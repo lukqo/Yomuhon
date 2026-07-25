@@ -24,6 +24,13 @@ struct ReaderView: View {
     @State private var pencilHoverLocation: CGPoint?
     @State private var pencilHoverPageIndex: Int?
     @State private var isPencilScrubbing = false
+    @State private var pageZoomScale: CGFloat = 1.0
+    @State private var pageZoomOffset: CGSize = .zero
+    @GestureState private var pinchMagnification: CGFloat = 1.0
+    @GestureState private var dragTranslation: CGSize = .zero
+    private let minPageZoomScale: CGFloat = 1.0
+    private let maxPageZoomScale: CGFloat = 4.0
+    private let doubleTapZoomScale: CGFloat = 2.4
     #if os(macOS)
     @State private var keyboardMonitor: Any?
     #endif
@@ -60,9 +67,6 @@ struct ReaderView: View {
             } else {
                 content
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        toggleControls()
-                    }
             }
 
             if viewModel.showsControls, !viewModel.pages.isEmpty {
@@ -165,16 +169,103 @@ struct ReaderView: View {
             ZStack {
                 pagedPageCanvas(proxy: proxy)
                     .id("\(viewModel.currentPage?.id ?? "empty")-\(viewModel.fitMode.rawValue)")
+                    .scaleEffect(pageZoomScale * pinchMagnification)
+                    .offset(
+                        x: pageZoomOffset.width + dragTranslation.width,
+                        y: pageZoomOffset.height + dragTranslation.height
+                    )
+                    .contentShape(Rectangle())
+                    .gesture(pageMagnificationGesture(containerSize: proxy.size))
+                    .simultaneousGesture(pagePanGesture(containerSize: proxy.size))
+                    // Chaining double-tap before single-tap on the SAME view makes
+                    // SwiftUI wait to see if a second tap arrives before firing the
+                    // single-tap action, so zooming in doesn't also flash the HUD.
+                    .onTapGesture(count: 2) {
+                        toggleZoom(containerSize: proxy.size)
+                    }
+                    .onTapGesture(count: 1) {
+                        toggleControls()
+                    }
 
                 HStack(spacing: 0) {
-                    pageTurnZone(isEnabled: viewModel.canGoBackward, action: goBackward)
+                    pageTurnZone(isEnabled: viewModel.canGoBackward && !isPageZoomed, action: goBackward)
 
                     Spacer(minLength: safePositiveDimension(YomuhonSpacing.grand, fallback: 64))
 
-                    pageTurnZone(isEnabled: viewModel.canGoForward, action: goForward)
+                    pageTurnZone(isEnabled: viewModel.canGoForward && !isPageZoomed, action: goForward)
                 }
             }
         }
+        .onChange(of: viewModel.currentPage?.id) { _ in
+            resetPageZoom()
+        }
+    }
+
+    // MARK: - Page zoom
+
+    private func pageMagnificationGesture(containerSize: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .updating($pinchMagnification) { value, state, _ in
+                state = value
+            }
+            .onEnded { value in
+                let newScale = clampedZoomScale(pageZoomScale * value)
+                pageZoomScale = newScale
+                pageZoomOffset = clampedZoomOffset(pageZoomOffset, scale: newScale, containerSize: containerSize)
+            }
+    }
+
+    private func pagePanGesture(containerSize: CGSize) -> some Gesture {
+        DragGesture()
+            .updating($dragTranslation) { value, state, _ in
+                guard isPageZoomed else { return }
+                state = value.translation
+            }
+            .onEnded { value in
+                guard isPageZoomed else { return }
+                let proposed = CGSize(
+                    width: pageZoomOffset.width + value.translation.width,
+                    height: pageZoomOffset.height + value.translation.height
+                )
+                pageZoomOffset = clampedZoomOffset(proposed, scale: pageZoomScale, containerSize: containerSize)
+            }
+    }
+
+    private func toggleZoom(containerSize: CGSize) {
+        withAnimation(YomuhonMotion.relaxed) {
+            if isPageZoomed {
+                pageZoomScale = minPageZoomScale
+                pageZoomOffset = .zero
+            } else {
+                pageZoomScale = doubleTapZoomScale
+                pageZoomOffset = .zero
+            }
+        }
+    }
+
+    private func resetPageZoom() {
+        pageZoomScale = minPageZoomScale
+        pageZoomOffset = .zero
+    }
+
+    private var isPageZoomed: Bool {
+        pageZoomScale > minPageZoomScale + 0.01
+    }
+
+    private func clampedZoomScale(_ scale: CGFloat) -> CGFloat {
+        min(max(scale, minPageZoomScale), maxPageZoomScale)
+    }
+
+    private func clampedZoomOffset(_ offset: CGSize, scale: CGFloat, containerSize: CGSize) -> CGSize {
+        guard scale > minPageZoomScale else { return .zero }
+
+        let maxX = max(0, containerSize.width * (scale - 1) / 2)
+        let maxY = max(0, containerSize.height * (scale - 1) / 2)
+
+        return CGSize(
+            width: min(max(offset.width, -maxX), maxX),
+            height: min(max(offset.height, -maxY), maxY)
+        )
     }
 
     @ViewBuilder
@@ -223,6 +314,10 @@ struct ReaderView: View {
             .padding(.vertical, YomuhonSpacing.small)
         }
         .id(viewModel.readingMode)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            toggleControls()
+        }
     }
 
     #if os(iOS)
@@ -444,6 +539,7 @@ struct ReaderView: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
+        .allowsHitTesting(isEnabled)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -484,17 +580,16 @@ struct ReaderView: View {
     private func switchMode() {
         let nextMode: ReadingMode = viewModel.readingMode == .paged ? .webtoon : .paged
         viewModel.handleReadingModeChange(nextMode)
+        resetPageZoom()
         revealControls()
     }
 
     private func goBackward() {
         viewModel.goBackward()
-        revealControls()
     }
 
     private func goForward() {
         viewModel.goForward()
-        revealControls()
     }
 
     private func toggleControls() {
@@ -1459,28 +1554,79 @@ private struct PlatformImageView: View {
     let url: URL
 
     @Environment(\.yomuhonTheme) private var theme
+    @StateObject private var loader = LocalPageImageLoader()
 
     var body: some View {
+        Group {
+            if let image = loader.image {
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .background(theme.secondaryBackground)
+            } else if loader.failed {
+                PagePlaceholder(kind: .unavailable, title: "", page: nil)
+            } else {
+                PagePlaceholder(kind: .loading, title: "", page: nil)
+            }
+        }
+        .onAppear {
+            loader.load(url: url)
+        }
+        .onChange(of: url) { newURL in
+            loader.load(url: newURL)
+        }
+    }
+}
+
+// Downloaded/local pages used to be decoded straight from disk inside
+// `body`, which runs on the main thread and — since `body` is not just
+// evaluated once — re-executed on every re-render (rotating the device,
+// resizing a Split View/Stage Manager window, toggling the HUD, zooming,
+// etc.). That made local pages look like they "reloaded" on layout changes.
+// Load and decode once per URL off the main thread instead, and cache it.
+private final class LocalPageImageLoader: ObservableObject {
+    @Published var image: Image?
+    @Published var failed = false
+
+    private var currentURL: URL?
+
+    private static let queue = DispatchQueue(
+        label: "com.yomuhon.local-page-image",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
+    func load(url: URL) {
+        guard currentURL != url else { return }
+
+        currentURL = url
+        image = nil
+        failed = false
+
+        Self.queue.async { [weak self] in
+            let loaded = Self.decodeImage(from: url)
+
+            DispatchQueue.main.async {
+                guard let self, self.currentURL == url else { return }
+
+                if let loaded {
+                    self.image = loaded
+                } else {
+                    self.failed = true
+                }
+            }
+        }
+    }
+
+    private static func decodeImage(from url: URL) -> Image? {
         #if os(macOS)
-        if let image = NSImage(contentsOf: url) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .background(theme.secondaryBackground)
-        } else {
-            PagePlaceholder(kind: .unavailable, title: "", page: nil)
-        }
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        return Image(nsImage: image)
         #elseif canImport(UIKit)
-        if let image = UIImage(contentsOfFile: url.path) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .background(theme.secondaryBackground)
-        } else {
-            PagePlaceholder(kind: .unavailable, title: "", page: nil)
-        }
+        guard let data = try? Data(contentsOf: url), let image = UIImage(data: data) else { return nil }
+        return Image(uiImage: image)
         #else
-        PagePlaceholder(kind: .unavailable, title: "", page: nil)
+        return nil
         #endif
     }
 }

@@ -787,6 +787,12 @@ private struct LibraryRailPoster: View {
             CoverView(title: manga.title, imageURL: manga.coverURL, cornerRadius: 14)
                 .frame(width: 118, height: 172)
                 .shadow(color: theme.shadow.opacity(isHovering ? 0.75 : 0.45), radius: isHovering ? 12 : 7, x: 0, y: isHovering ? 7 : 4)
+                .overlay(alignment: .bottomTrailing) {
+                    if let languageBadgeLabel = manga.languageBadgeLabel {
+                        YomuhonLanguageBadge(label: languageBadgeLabel)
+                            .padding(6)
+                    }
+                }
 
             Text(manga.title)
                 .font(YomuhonTypography.captionMedium)
@@ -850,6 +856,12 @@ private struct LibraryPoster: View {
                             .frame(width: 27, height: 27)
                             .background(Color.black.opacity(0.64))
                             .clipShape(Circle())
+                            .padding(7)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if let languageBadgeLabel = manga.languageBadgeLabel {
+                        YomuhonLanguageBadge(label: languageBadgeLabel)
                             .padding(7)
                     }
                 }

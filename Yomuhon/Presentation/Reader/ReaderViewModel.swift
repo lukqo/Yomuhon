@@ -36,6 +36,7 @@ final class ReaderViewModel: ObservableObject {
     private var prefetchedChapterPages: [String: [Page]] = [:]
     private var chapterPreloadInFlight = Set<String>()
     private var automaticChapterAdvanceWorkItem: DispatchWorkItem?
+    private var progressSaveWorkItem: DispatchWorkItem?
 
     init(
         manga: Manga,
@@ -443,8 +444,13 @@ final class ReaderViewModel: ObservableObject {
         updateProgress()
     }
 
+    /// Cancels any pending debounced save and persists immediately. Call this
+    /// at points where the reader is about to go away (onDisappear, closing
+    /// the reader) so the exact last page is never lost.
     func flushProgress() {
-        updateProgress()
+        progressSaveWorkItem?.cancel()
+        progressSaveWorkItem = nil
+        persistProgress()
     }
 
     func loadPagesIfNeeded() {
@@ -570,7 +576,22 @@ final class ReaderViewModel: ObservableObject {
         }
     }
 
+    // Saving progress hits Core Data (a fetch + a save) and re-encodes the
+    // manga's full chapter list to JSON. Doing that synchronously on every
+    // single page turn caused visible stutter while flipping pages quickly.
+    // Coalesce rapid changes into one save shortly after they settle, and
+    // let flushProgress() force an immediate save when the reader closes.
     private func updateProgress() {
+        progressSaveWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.persistProgress()
+        }
+        progressSaveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: workItem)
+    }
+
+    private func persistProgress() {
         updateReadingProgressUseCase?.execute(
             manga: manga,
             chapter: chapter,

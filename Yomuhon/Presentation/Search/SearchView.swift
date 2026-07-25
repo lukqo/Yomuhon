@@ -280,9 +280,8 @@ struct SearchView: View {
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: YomuhonSpacing.medium) {
-                    ForEach(Array(mangas.enumerated()), id: \.offset) { item in
-                        let manga = item.element
+                LazyHStack(alignment: .top, spacing: YomuhonSpacing.medium) {
+                    ForEach(mangas, id: \.self) { manga in
                         discoveryTrigger(for: manga) {
                             DiscoveryMangaPoster(manga: manga)
                         }
@@ -315,9 +314,8 @@ struct SearchView: View {
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: YomuhonSpacing.medium) {
-                        ForEach(Array(viewModel.genreMangas.enumerated()), id: \.offset) { item in
-                            let manga = item.element
+                    LazyHStack(alignment: .top, spacing: YomuhonSpacing.medium) {
+                        ForEach(viewModel.genreMangas, id: \.self) { manga in
                             discoveryTrigger(for: manga) {
                                 DiscoveryMangaPoster(manga: manga)
                             }
@@ -740,6 +738,12 @@ private struct DiscoveryMangaPoster: View {
                 .frame(width: 118, height: 172)
                 .clipped()
                 .shadow(color: theme.shadow.opacity(isHovering ? 0.72 : 0.42), radius: isHovering ? 12 : 7, x: 0, y: isHovering ? 7 : 4)
+                .overlay(alignment: .bottomTrailing) {
+                    if let languageBadgeLabel = manga.languageBadgeLabel {
+                        YomuhonLanguageBadge(label: languageBadgeLabel)
+                            .padding(6)
+                    }
+                }
 
             Text(manga.title)
                 .font(YomuhonTypography.captionMedium)
@@ -802,6 +806,12 @@ private struct SearchResultBookRow: View {
                 .frame(width: isCompact ? 58 : 82, height: isCompact ? 82 : 116)
                 .clipped()
                 .shadow(color: theme.shadow.opacity(isHovering ? 0.7 : 0.4), radius: isHovering ? 10 : 6, x: 0, y: isHovering ? 6 : 3)
+                .overlay(alignment: .bottomTrailing) {
+                    if let languageBadgeLabel = manga.languageBadgeLabel {
+                        YomuhonLanguageBadge(label: languageBadgeLabel, isCompact: isCompact)
+                            .padding(isCompact ? 3 : 5)
+                    }
+                }
 
             VStack(alignment: .leading, spacing: YomuhonSpacing.small) {
                 Text(title)

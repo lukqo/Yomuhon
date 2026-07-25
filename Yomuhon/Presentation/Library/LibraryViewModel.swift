@@ -5,6 +5,7 @@
 
 import Combine
 import Foundation
+import SwiftUI
 
 final class LibraryViewModel: ObservableObject {
     @Published var mangas: [Manga] = []
@@ -250,7 +251,18 @@ final class LibraryViewModel: ObservableObject {
     func deleteManga(_ manga: Manga) {
         LibraryMembershipStore.shared.remove(manga.id)
         getLibraryUseCase.deleteManga(manga)
-        loadLibrary()
+
+        // Delete is only ever triggered from the long-press context menu, so
+        // the card is still mid-way through the system's dismiss animation
+        // when this fires. Removing it from `mangas` immediately (which
+        // yanks the card out of the grid) fought with that animation and
+        // produced a visible glitch on iPad. Give the dismiss a moment to
+        // finish before the grid actually reflows.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            withAnimation(YomuhonMotion.relaxed) {
+                self?.loadLibrary()
+            }
+        }
     }
 
     func removeFromShelf(_ manga: Manga) {
