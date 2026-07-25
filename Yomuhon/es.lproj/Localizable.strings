@@ -401,7 +401,6 @@
 "sources.remote.state.unknown" = "Estado remoto de fuentes desconocido";
 "sources.remote.state.remote" = "Usando el índice más nuevo de GitHub";
 "sources.remote.state.cache" = "Usando fuentes de GitHub guardadas en cache";
-"sources.remote.state.bundled" = "Usando fuentes fallback incluidas en la app";
 "sources.remote.state.offline" = "GitHub no disponible, usando fuentes fallback";
 "sources.remote.state.badSchema" = "Schema del índice de GitHub no soportado, usando fallback";
 "sources.remote.state.noValidConfigs" = "No hay configs válidas en GitHub, usando fallback";

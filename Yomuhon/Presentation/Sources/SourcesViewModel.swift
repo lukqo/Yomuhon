@@ -101,6 +101,7 @@ final class SourcesViewModel: ObservableObject {
     private let store: SourceSettingsStoring
     private let autoHealthInterval: TimeInterval = 60 * 60 * 12
     private var scheduledMaintenanceWorkItem: DispatchWorkItem?
+    private var hasStartedLaunchCatalogRefresh = false
     private let automaticMaintenanceLaunchDelay: TimeInterval = 45
     private let lastMaintenanceKey = "yomuhon.sources.lastVerifiedMaintenance.v5"
     private let catalogFingerprintKey = "yomuhon.sources.catalogFingerprint.v2"
@@ -189,9 +190,28 @@ final class SourcesViewModel: ObservableObject {
     }
 
     func performScheduledMaintenanceIfNeeded() {
+        refreshCatalogOnLaunchIfNeeded()
+
         // Full live diagnostics are maintenance, never part of app launch or the
         // reader critical path. Give Search/Detail a quiet network window first.
         scheduleAutomaticMaintenance(after: automaticMaintenanceLaunchDelay)
+    }
+
+    private func refreshCatalogOnLaunchIfNeeded() {
+        guard !hasStartedLaunchCatalogRefresh else { return }
+        hasStartedLaunchCatalogRefresh = true
+
+        let store = self.store
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            _ = SourceRequestPriorityContext.withPriority(.background) {
+                DeclarativeRemoteConfigLoader.refreshConfigs()
+            }
+            let refreshedRepositories = store.loadRepositories()
+
+            DispatchQueue.main.async {
+                self?.repositories = refreshedRepositories
+            }
+        }
     }
 
     private func scheduleAutomaticMaintenance(after delay: TimeInterval) {
@@ -500,7 +520,6 @@ struct SourceSmokeTester {
 
     private static func source(for sourceID: String) -> Source? {
         DeclarativeRemoteConfigLoader.sourceForDiagnostics(id: sourceID)
-            ?? DeclarativeSourceFactory.source(id: sourceID)
     }
 
     private static func diagnosticRequirements(for source: Source) -> SourceDiagnosticRequirements {

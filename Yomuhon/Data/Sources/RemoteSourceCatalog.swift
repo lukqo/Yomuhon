@@ -54,14 +54,12 @@ enum DeclarativeRemoteConfigLoader {
         }
         lock.unlock()
 
-        let cached = loadCachedConfigs()
-        let bundled = DeclarativeSourceFactory.bundledConfigs()
-        let configs = preferNewest(primary: cached, fallback: bundled)
+        let configs = loadCachedConfigs()
             .filter { DeclarativeSourceConfigurationValidator.validateStandalone($0) }
 
         let diagnostics = DeclarativeRemoteConfigDiagnostics(
-            state: cached.isEmpty ? .bundled : .cache,
-            message: cached.isEmpty ? "sources.remote.state.bundled" : "sources.remote.state.cache",
+            state: configs.isEmpty ? .unknown : .cache,
+            message: configs.isEmpty ? "sources.remote.state.unknown" : "sources.remote.state.cache",
             configCount: configs.count
         )
 
@@ -107,7 +105,6 @@ enum DeclarativeRemoteConfigLoader {
         // three providers to one and make Search/Discover flicker.
         let fallbackCurrent = availableConfigs()
         let fallbackCached = loadCachedConfigs()
-        let fallbackBundled = DeclarativeSourceFactory.bundledConfigs()
 
         do {
             let indexData = try HTTPClient(
@@ -118,7 +115,6 @@ enum DeclarativeRemoteConfigLoader {
                 indexData: indexData,
                 fallbackCurrent: fallbackCurrent,
                 fallbackCached: fallbackCached,
-                fallbackBundled: fallbackBundled,
                 configDataLoader: { url in
                     try HTTPClient(
                         timeout: 12,
@@ -140,8 +136,7 @@ enum DeclarativeRemoteConfigLoader {
             storeInMemory(configs: configs, diagnostics: diagnostics)
             return configs
         } catch let error as DeclarativeSourceError {
-            let persistedFallback = preferNewest(primary: fallbackCached, fallback: fallbackBundled)
-            let configs = preferNewest(primary: fallbackCurrent, fallback: persistedFallback)
+            let configs = preferNewest(primary: fallbackCurrent, fallback: fallbackCached)
                 .filter { DeclarativeSourceConfigurationValidator.validateStandalone($0) }
             let diagnostics = DeclarativeRemoteConfigDiagnostics(
                 state: .invalidRemote,
@@ -151,8 +146,7 @@ enum DeclarativeRemoteConfigLoader {
             storeInMemory(configs: configs, diagnostics: diagnostics)
             return configs
         } catch {
-            let persistedFallback = preferNewest(primary: fallbackCached, fallback: fallbackBundled)
-            let configs = preferNewest(primary: fallbackCurrent, fallback: persistedFallback)
+            let configs = preferNewest(primary: fallbackCurrent, fallback: fallbackCached)
                 .filter { DeclarativeSourceConfigurationValidator.validateStandalone($0) }
             let diagnostics = DeclarativeRemoteConfigDiagnostics(
                 state: .offline,
@@ -173,7 +167,6 @@ enum DeclarativeRemoteConfigLoader {
         indexData: Data,
         fallbackCurrent: [DeclarativeSourceConfig] = [],
         fallbackCached: [DeclarativeSourceConfig] = [],
-        fallbackBundled: [DeclarativeSourceConfig] = [],
         configDataLoader: @escaping (URL) throws -> Data
     ) throws -> [DeclarativeSourceConfig] {
         let index = try JSONDecoder().decode(DeclarativeSourceIndex.self, from: indexData)
@@ -181,7 +174,6 @@ enum DeclarativeRemoteConfigLoader {
 
         let currentByID = Dictionary(uniqueKeysWithValues: fallbackCurrent.map { ($0.id, $0) })
         let cachedByID = Dictionary(uniqueKeysWithValues: fallbackCached.map { ($0.id, $0) })
-        let bundledByID = Dictionary(uniqueKeysWithValues: fallbackBundled.map { ($0.id, $0) })
         var seenIDs = Set<String>()
         let discoverableEntries = index.sources.filter { entry in
             shouldDiscover(entry) && seenIDs.insert(entry.id).inserted
@@ -203,8 +195,7 @@ enum DeclarativeRemoteConfigLoader {
 
                 let fallbackCandidates = [
                     currentByID[entry.id],
-                    cachedByID[entry.id],
-                    bundledByID[entry.id]
+                    cachedByID[entry.id]
                 ]
                 .compactMap { $0 }
                 .filter {
@@ -557,86 +548,176 @@ enum DeclarativeSourceConfigurationValidator {
     private static func validateRouteAndSelectorContract(
         _ config: DeclarativeSourceConfig
     ) -> Bool {
-        if config.engineMode == .jsonAPI {
-            guard let api = config.api else { return false }
-            if config.supports.search, api.search == nil { return false }
-            if config.supports.chapters, api.chapters == nil { return false }
-            if config.supports.pages, api.pages == nil { return false }
-            if config.supports.details && !config.supports.chapters { return false }
-
-            if config.supports.popular {
-                guard let popular = config.discover?.popular?.api,
-                      validateAPIListOperation(popular)
+        func validAPIRequest(_ request: DeclarativeAPIRequest) -> Bool {
+            guard request.path.hasPrefix("/") else { return false }
+            let method = (request.method ?? "GET").uppercased()
+            guard method == "GET" else { return false }
+            if let baseURL = request.baseURL {
+                guard baseURL.scheme?.lowercased() == "https",
+                      domainMatches(baseURL.host, allowedDomains: config.allowedDomains)
                 else { return false }
             }
+            return true
+        }
 
-            if config.supports.supportsGenres {
-                guard let genres = config.discover?.genres,
-                      validateGenreItems(genres.items),
-                      let operation = genres.operation.api,
-                      validateAPIListOperation(operation)
+        func validVariables(_ variables: [String: DeclarativeAPIVariableRule]?) -> Bool {
+            guard let variables else { return true }
+            return variables.allSatisfy { name, rule in
+                guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      ["mangaID", "mangaURL"].contains(rule.from)
                 else { return false }
+                if let regex = rule.regex,
+                   (regex.isEmpty || (try? NSRegularExpression(pattern: regex)) == nil) {
+                    return false
+                }
+                return rule.defaultValue?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != true
             }
+        }
 
-            return validateAPIContract(api, supports: config.supports)
+        if let preserved = config.identity?.preserveQueryItems {
+            let normalized = preserved.map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            }
+            guard normalized.allSatisfy({
+                !$0.isEmpty && $0.range(
+                    of: #"^[a-z0-9_.~-]+$"#,
+                    options: [.regularExpression, .caseInsensitive]
+                ) != nil
+            }), Set(normalized).count == normalized.count else {
+                return false
+            }
         }
 
         if config.supports.search {
-            guard let route = config.routes.search,
-                  config.selectors.search != nil,
-                  validate(route)
-            else { return false }
+            switch config.engineMode(for: .search) {
+            case .html:
+                guard let route = config.routes.search,
+                      config.selectors.search != nil,
+                      validate(route)
+                else { return false }
+            case .jsonAPI:
+                guard let operation = config.api?.search,
+                      validAPIRequest(operation.request),
+                      validateAPIListOperation(operation)
+                else { return false }
+            }
         }
 
         if config.supports.popular {
-            if let operation = config.discover?.popular {
-                guard let route = operation.route,
-                      operation.selector != nil,
-                      validate(route)
-                else { return false }
-            } else {
-                guard let route = config.routes.popular,
-                      config.selectors.popular != nil,
-                      validate(route)
+            switch config.engineMode(for: .popular) {
+            case .html:
+                if let operation = config.discover?.popular {
+                    guard let route = operation.route,
+                          operation.selector != nil,
+                          validate(route)
+                    else { return false }
+                } else {
+                    guard let route = config.routes.popular,
+                          config.selectors.popular != nil,
+                          validate(route)
+                    else { return false }
+                }
+            case .jsonAPI:
+                guard let operation = config.discover?.popular?.api,
+                      validAPIRequest(operation.request),
+                      validateAPIListOperation(operation)
                 else { return false }
             }
         }
 
         if config.supports.supportsGenres {
             guard let genres = config.discover?.genres,
-                  validateGenreItems(genres.items),
-                  let route = genres.operation.route,
-                  genres.operation.selector != nil,
-                  validate(route)
+                  validateGenreItems(genres.items)
             else { return false }
+
+            switch config.engineMode(for: .genres) {
+            case .html:
+                guard let route = genres.operation.route,
+                      genres.operation.selector != nil,
+                      validate(route)
+                else { return false }
+            case .jsonAPI:
+                guard let operation = genres.operation.api,
+                      validAPIRequest(operation.request),
+                      validateAPIListOperation(operation)
+                else { return false }
+            }
         }
 
-        if config.supports.details, config.selectors.details == nil {
-            return false
+        if config.supports.details {
+            switch config.engineMode(for: .details) {
+            case .html:
+                guard config.selectors.details != nil else { return false }
+            case .jsonAPI:
+                // Schema v1 has no standalone detail API. JSON details reuse the
+                // chapter operation, matching the historical json-api behavior.
+                guard config.supports.chapters,
+                      let operation = config.api?.chapters,
+                      validAPIRequest(operation.request),
+                      validVariables(operation.variables)
+                else { return false }
+            }
         }
 
-        if config.supports.chapters, config.selectors.chapters == nil {
-            return false
+        if config.supports.chapters {
+            switch config.engineMode(for: .chapters) {
+            case .html:
+                guard config.selectors.chapters != nil else { return false }
+            case .jsonAPI:
+                guard let chapters = config.api?.chapters,
+                      validAPIRequest(chapters.request),
+                      !chapters.itemsPath.isEmpty,
+                      !chapters.idPath.isEmpty,
+                      !chapters.numberPath.isEmpty,
+                      validVariables(chapters.variables)
+                else { return false }
+
+                if let pagination = chapters.pagination {
+                    guard !pagination.offsetParam.isEmpty,
+                          !pagination.limitParam.isEmpty,
+                          (1...500).contains(pagination.limit)
+                    else { return false }
+                    if let maxPages = pagination.maxPages, !(1...1_000).contains(maxPages) {
+                        return false
+                    }
+                    if let maxItems = pagination.maxItems, !(1...100_000).contains(maxItems) {
+                        return false
+                    }
+                    if let totalPath = pagination.totalPath, totalPath.isEmpty {
+                        return false
+                    }
+                }
+            }
         }
 
         if config.supports.pages {
             guard config.supports.chapters else { return false }
-            guard let pages = config.selectors.pages, !pages.extractors.isEmpty else {
-                return false
-            }
-
-            for extractor in pages.extractors {
-                switch extractor.type {
-                case "css":
-                    guard let selector = extractor.selector, !selector.isEmpty else { return false }
-                case "regex":
-                    guard let pattern = extractor.pattern,
-                          !pattern.isEmpty,
-                          (try? NSRegularExpression(pattern: pattern)) != nil
-                    else { return false }
-                default:
+            switch config.engineMode(for: .pages) {
+            case .html:
+                guard let pages = config.selectors.pages, !pages.extractors.isEmpty else {
                     return false
                 }
+                for extractor in pages.extractors {
+                    switch extractor.type {
+                    case "css":
+                        guard let selector = extractor.selector, !selector.isEmpty else { return false }
+                    case "regex":
+                        guard let pattern = extractor.pattern,
+                              !pattern.isEmpty,
+                              (try? NSRegularExpression(pattern: pattern)) != nil
+                        else { return false }
+                    default:
+                        return false
+                    }
+                }
+            case .jsonAPI:
+                guard let pages = config.api?.pages,
+                      validAPIRequest(pages.request),
+                      !pages.baseURLPath.isEmpty,
+                      !pages.hashPath.isEmpty,
+                      !pages.itemsPath.isEmpty,
+                      pages.urlTemplate.contains("{item}")
+                else { return false }
             }
         }
 
@@ -744,7 +825,6 @@ enum DeclarativeSourceConfigurationValidator {
     }
 
     private static func validateSelectorSyntax(_ config: DeclarativeSourceConfig) -> Bool {
-        if config.engineMode == .jsonAPI { return true }
         var selectors: [String] = []
 
         func append(_ field: DeclarativeFieldSelector?) {
@@ -756,36 +836,47 @@ enum DeclarativeSourceConfigurationValidator {
             }
         }
 
-        let discoveryLists = [
-            config.discover?.popular?.selector,
-            config.discover?.genres?.operation.selector
-        ]
-        let listSelectors = [config.selectors.search, config.selectors.popular]
-            + discoveryLists
-
-        for list in listSelectors.compactMap({ $0 }) {
+        if config.engineMode(for: .search) == .html,
+           let list = config.selectors.search {
             selectors.append(list.container)
             append(list.title)
             append(list.url)
             append(list.cover)
+            if !validateHTMLScope(list.htmlScope) { return false }
+        }
 
-            if let scope = list.htmlScope {
-                let patterns = [scope.afterRegex, scope.beforeRegex].compactMap { $0 }
-                guard !patterns.isEmpty,
-                      patterns.allSatisfy({ !$0.isEmpty && (try? NSRegularExpression(pattern: $0)) != nil })
-                else {
-                    return false
-                }
+        if config.engineMode(for: .popular) == .html {
+            let list = config.discover?.popular?.selector ?? config.selectors.popular
+            if let list {
+                selectors.append(list.container)
+                append(list.title)
+                append(list.url)
+                append(list.cover)
+                if !validateHTMLScope(list.htmlScope) { return false }
             }
         }
 
-        if let details = config.selectors.details {
+        if config.engineMode(for: .genres) == .html,
+           let list = config.discover?.genres?.operation.selector {
+            selectors.append(list.container)
+            append(list.title)
+            append(list.url)
+            append(list.cover)
+            if !validateHTMLScope(list.htmlScope) { return false }
+        }
+
+        if config.engineMode(for: .details) == .html,
+           let details = config.selectors.details {
             append(details.title)
             append(details.synopsis)
             append(details.cover)
+            append(details.alternativeTitles)
+            append(details.author)
+            append(details.year)
         }
 
-        if let chapters = config.selectors.chapters {
+        if config.engineMode(for: .chapters) == .html,
+           let chapters = config.selectors.chapters {
             selectors.append(chapters.container)
             append(chapters.title)
             append(chapters.url)
@@ -799,12 +890,21 @@ enum DeclarativeSourceConfigurationValidator {
             }
         }
 
-        if let pages = config.selectors.pages {
+        if config.engineMode(for: .pages) == .html,
+           let pages = config.selectors.pages {
             selectors.append(contentsOf: pages.extractors.compactMap { $0.selector })
         }
 
         guard !selectors.contains("__invalid_regex__") else { return false }
         return selectors.allSatisfy(SimpleHTMLDocument.supports)
+    }
+
+    private static func validateHTMLScope(_ scope: DeclarativeHTMLScope?) -> Bool {
+        guard let scope else { return true }
+        let patterns = [scope.afterRegex, scope.beforeRegex].compactMap { $0 }
+        return !patterns.isEmpty && patterns.allSatisfy {
+            !$0.isEmpty && (try? NSRegularExpression(pattern: $0)) != nil
+        }
     }
 
     private static func isISODate(_ value: String) -> Bool {
@@ -876,10 +976,4 @@ enum DeclarativeSourceConfigurationValidator {
 
         return .orderedSame
     }
-}
-
-enum DeclarativeSourceFactory {
-    static func bundledConfigs() -> [DeclarativeSourceConfig] { [] }
-    static func bundledSources() -> [Source] { [] }
-    static func source(id: String) -> Source? { nil }
 }

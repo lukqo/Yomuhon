@@ -253,45 +253,35 @@ enum NativeSourceCatalog {
     }
 
     static func canonicalFamily(for id: String, name: String) -> String {
-        let normalized = "\(id) \(name)"
-            .lowercased()
-            .replacingOccurrences(of: "json", with: "")
-            .replacingOccurrences(of: "declarative", with: "")
-            .replacingOccurrences(of: #"[^a-z0-9]+"#, with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let ignoredTokens: Set<String> = [
+            "adapter", "api", "declarative", "html", "json", "native", "runtime", "source"
+        ]
 
-        if normalized.contains("mangakatana") {
-            return "mangakatana"
+        func normalizedTokens(_ value: String) -> [String] {
+            value
+                .lowercased()
+                .replacingOccurrences(of: #"[^a-z0-9]+"#, with: " ", options: .regularExpression)
+                .split(whereSeparator: \.isWhitespace)
+                .map(String.init)
+                .filter { !ignoredTokens.contains($0) }
         }
 
-        if normalized.contains("mangapill") {
-            return "mangapill"
+        let idTokens = normalizedTokens(id)
+        if !idTokens.isEmpty {
+            return idTokens.joined(separator: "-")
         }
 
-        if normalized.contains("mangadex") {
-            return "mangadex"
-        }
-
-        if normalized.contains("local library") || normalized.contains("local") {
-            return "local"
-        }
-
-        return normalized
+        return normalizedTokens(name).joined(separator: "-")
     }
 
     static func familyDisplayName(for family: String, fallbackSourceID: String) -> String {
-        switch family {
-        case "mangakatana":
-            return "MangaKatana"
-        case "mangapill":
-            return "MangaPill"
-        case "mangadex":
-            return "MangaDex"
-        case "local":
-            return "Local Library"
-        default:
-            return displayName(for: fallbackSourceID)
+        if let descriptor = adapters.first(where: { descriptor in
+            canonicalFamily(for: descriptor.id, name: descriptor.name) == family
+        }) {
+            return userFacingName(descriptor.name)
         }
+
+        return displayName(for: fallbackSourceID)
     }
 
     static var adapterIDs: Set<String> {
@@ -334,8 +324,16 @@ enum NativeSourceCatalog {
     }
 
     static func isLegacyNativeAdapterID(_ sourceID: String) -> Bool {
-        let normalized = sourceID.lowercased()
-        return normalized == "mangapill" || normalized == "mangakatana"
+        guard !adapterIDs.contains(where: {
+            $0.caseInsensitiveCompare(sourceID) == .orderedSame
+        }) else {
+            return false
+        }
+
+        let family = canonicalFamily(for: sourceID, name: sourceID)
+        return adapters.contains { descriptor in
+            canonicalFamily(for: descriptor.id, name: descriptor.name) == family
+        }
     }
 
     static func supportsReading(sourceID: String) -> Bool {
@@ -437,33 +435,31 @@ enum NativeSourceCatalog {
     }
 
     static func displayName(for sourceID: String) -> String {
-        let normalized = sourceID.lowercased()
-
-        if let adapterName = adapters.first(where: { $0.id.lowercased() == normalized })?.name {
-            return userFacingName(adapterName)
+        if let exact = adapters.first(where: {
+            $0.id.caseInsensitiveCompare(sourceID) == .orderedSame
+        }) {
+            return userFacingName(exact.name)
         }
 
-        if normalized == "mangadex" || normalized.contains("mangadex") {
-            return "MangaDex"
-        }
-
-        if normalized == "mangapill" || normalized.contains("mangapill") {
-            return "MangaPill"
-        }
-
-        if normalized == "mangakatana" || normalized.contains("mangakatana") {
-            return "MangaKatana"
+        let family = canonicalFamily(for: sourceID, name: sourceID)
+        if let familyMatch = adapters.first(where: { descriptor in
+            canonicalFamily(for: descriptor.id, name: descriptor.name) == family
+        }) {
+            return userFacingName(familyMatch.name)
         }
 
         return userFacingName(sourceID)
     }
 
     private static func userFacingName(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: #"\s+(JSON|Declarative|Adapter)$"#, with: "", options: [.regularExpression, .caseInsensitive])
-            .replacingOccurrences(of: #"\s+Source$"#, with: "", options: [.regularExpression, .caseInsensitive])
+        let cleaned = value
+            .replacingOccurrences(of: #"[_-]+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+(JSON|Declarative|Adapter|Source)$"#, with: "", options: [.regularExpression, .caseInsensitive])
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard cleaned == cleaned.lowercased() else { return cleaned }
+        return cleaned.capitalized
     }
 }
 

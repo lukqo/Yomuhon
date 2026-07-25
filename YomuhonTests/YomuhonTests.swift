@@ -1033,7 +1033,8 @@ final class YomuhonTests: XCTestCase {
     }
 
     func testAppShipsNoBundledProviderDefinitions() throws {
-        XCTAssertTrue(DeclarativeSourceFactory.bundledConfigs().isEmpty)
+        // Production provider definitions are obtained from the remote repository
+        // or its last successfully downloaded cache, never from the app bundle.
         XCTAssertTrue(SourceRepositoryImpl.defaultSources.isEmpty)
     }
 
@@ -1357,7 +1358,10 @@ final class YomuhonTests: XCTestCase {
             chapters: []
         )
 
+        XCTAssertEqual(manga.declarativeSourceURL?.query, "title_no=123")
+
         let detailed = try source.fetchDetails(for: manga)
+        XCTAssertEqual(detailed.declarativeSourceURL?.query, "title_no=123")
         let chapter = try XCTUnwrap(detailed.chapters.first)
         let pages = try source.fetchPages(for: chapter, manga: detailed)
 
@@ -1804,10 +1808,10 @@ final class YomuhonTests: XCTestCase {
         XCTAssertEqual(second.readingMode, .webtoon)
     }
 
-    func testSourceDisplayNameHidesRuntimeSuffix() {
+    func testSourceDisplayNameHidesRuntimeSuffixWithoutProviderHardcoding() {
         XCTAssertEqual(
-            NativeSourceCatalog.displayName(for: "mangapill_json"),
-            "MangaPill"
+            NativeSourceCatalog.displayName(for: "sample_reader_json"),
+            "Sample Reader"
         )
     }
 
@@ -3050,6 +3054,158 @@ final class YomuhonTests: XCTestCase {
 
         store.saveRepositories(repositories)
         return store
+    }
+
+
+    func testDeclarativeHybridSourceUsesHTMLForCatalogJSONForChaptersAndHTMLForPages() throws {
+        let configJSON = #"""
+        {
+          "schemaVersion": 1,
+          "id": "hybrid_fixture",
+          "name": "Hybrid Fixture",
+          "version": 1,
+          "language": "en",
+          "baseURL": "https://www.example.com",
+          "engineMode": "html",
+          "operationModes": {
+            "chapters": "json-api"
+          },
+          "identity": {
+            "preserveQueryItems": ["title_no"]
+          },
+          "enabledByDefault": false,
+          "experimental": true,
+          "allowedDomains": ["www.example.com", "m.example.com", "cdn.example.com"],
+          "supports": {
+            "search": true,
+            "popular": false,
+            "details": true,
+            "chapters": true,
+            "pages": true
+          },
+          "routes": {
+            "search": {
+              "path": "/en/search",
+              "query": {"keyword": "{{query}}"}
+            }
+          },
+          "selectors": {
+            "search": {
+              "container": ".series li a",
+              "title": {"selectors": [".title"], "attrs": ["text"]},
+              "url": {"attrs": ["href"], "required": true},
+              "cover": {"selectors": ["img"], "attrs": ["src"]}
+            },
+            "details": {
+              "title": {"selectors": ["h1.title"], "attrs": ["text"]},
+              "synopsis": {"selectors": ["p.summary"], "attrs": ["text"]}
+            },
+            "pages": {
+              "extractors": [
+                {"type": "css", "selector": "div#images img", "attrs": ["data-url", "src"]}
+              ]
+            }
+          },
+          "api": {
+            "chapters": {
+              "request": {
+                "method": "GET",
+                "baseURL": "https://m.example.com",
+                "path": "/api/v1/{{contentType}}/{{titleID}}/episodes",
+                "query": {"pageSize": 99999}
+              },
+              "itemsPath": "result.episodeList",
+              "idPath": "viewerLink",
+              "numberPath": "episodeNo",
+              "titlePath": "episodeTitle",
+              "urlPath": "viewerLink",
+              "variables": {
+                "titleID": {
+                  "from": "mangaURL",
+                  "regex": "[?&]title_no=([0-9]+)"
+                },
+                "contentType": {
+                  "from": "mangaURL",
+                  "regex": "/(canvas)/",
+                  "default": "webtoon"
+                }
+              },
+              "sort": "numberAscending"
+            }
+          }
+        }
+        """#
+
+        let config = try JSONDecoder().decode(
+            DeclarativeSourceConfig.self,
+            from: Data(configJSON.utf8)
+        )
+        XCTAssertTrue(DeclarativeSourceConfigurationValidator.validateStandalone(config))
+        var requestedURLs: [URL] = []
+        let source = DeclarativeSourceRuntime(config: config) { request in
+            let url = try XCTUnwrap(request.url)
+            requestedURLs.append(url)
+
+            if url.host == "www.example.com", url.path == "/en/search" {
+                return Data(#"""
+                <ul class="series">
+                  <li><a href="/en/canvas/demo/list?title_no=123"><span class="title">Demo</span><img src="https://cdn.example.com/cover.jpg"></a></li>
+                </ul>
+                """#.utf8)
+            }
+
+            if url.host == "www.example.com", url.path == "/en/canvas/demo/list" {
+                return Data(#"""
+                <h1 class="title">Demo</h1>
+                <p class="summary">Hybrid source fixture.</p>
+                """#.utf8)
+            }
+
+            if url.host == "m.example.com", url.path == "/api/v1/canvas/123/episodes" {
+                return Data(#"""
+                {
+                  "result": {
+                    "episodeList": [
+                      {
+                        "episodeNo": 2,
+                        "episodeTitle": "Episode 2",
+                        "viewerLink": "/en/canvas/demo/episode-2/viewer?title_no=123&episode_no=2"
+                      },
+                      {
+                        "episodeNo": 1,
+                        "episodeTitle": "Episode 1",
+                        "viewerLink": "/en/canvas/demo/episode-1/viewer?title_no=123&episode_no=1"
+                      }
+                    ]
+                  }
+                }
+                """#.utf8)
+            }
+
+            if url.host == "www.example.com", url.path.contains("/viewer") {
+                return Data(#"""
+                <div id="images">
+                  <img data-url="https://cdn.example.com/page-1.jpg">
+                  <img data-url="https://cdn.example.com/page-2.jpg">
+                </div>
+                """#.utf8)
+            }
+
+            XCTFail("Unexpected request: \(url.absoluteString)")
+            return Data()
+        }
+
+        let manga = try XCTUnwrap(source.searchManga(query: "demo").first)
+        let detailed = try source.fetchDetails(for: manga)
+        let chapter = try XCTUnwrap(detailed.chapters.first)
+        let pages = try source.fetchPages(for: chapter, manga: detailed)
+
+        XCTAssertEqual(detailed.title, "Demo")
+        XCTAssertEqual(detailed.chapters.map(\.number), [1, 2])
+        XCTAssertEqual(chapter.declarativeSourceURL?.host, "www.example.com")
+        XCTAssertEqual(chapter.declarativeSourceURL?.query, "title_no=123&episode_no=1")
+        XCTAssertEqual(pages.count, 2)
+        XCTAssertTrue(requestedURLs.contains { $0.host == "m.example.com" && $0.path == "/api/v1/canvas/123/episodes" })
     }
 
 }

@@ -176,6 +176,35 @@ enum DeclarativeEngineMode: String, Codable {
     case jsonAPI = "json-api"
 }
 
+enum DeclarativeSourceOperation {
+    case popular
+    case search
+    case details
+    case chapters
+    case pages
+    case genres
+}
+
+struct DeclarativeOperationModes: Codable {
+    let popular: DeclarativeEngineMode?
+    let search: DeclarativeEngineMode?
+    let details: DeclarativeEngineMode?
+    let chapters: DeclarativeEngineMode?
+    let pages: DeclarativeEngineMode?
+    let genres: DeclarativeEngineMode?
+
+    func mode(for operation: DeclarativeSourceOperation) -> DeclarativeEngineMode? {
+        switch operation {
+        case .popular: return popular
+        case .search: return search
+        case .details: return details
+        case .chapters: return chapters
+        case .pages: return pages
+        case .genres: return genres
+        }
+    }
+}
+
 struct DeclarativeSourceIndex: Codable {
     let schemaVersion: Int
     let updatedAt: String
@@ -205,6 +234,15 @@ struct DeclarativeSourceConfig: Codable, Identifiable {
     let language: String
     let baseURL: URL
     let engineMode: DeclarativeEngineMode
+    /// Optional per-operation runtime overrides. When omitted, `engineMode`
+    /// remains the source-wide fallback so all existing schema-v1 definitions
+    /// continue to decode unchanged.
+    let operationModes: DeclarativeOperationModes?
+    /// Optional identity/canonicalization rules for source URLs. By default,
+    /// transient query strings are removed. Sources that encode a stable title
+    /// identifier in the query may declare only those public query-item names
+    /// that must survive canonicalization.
+    let identity: DeclarativeIdentityConfig?
     /// Legacy schema-v1 field. Publication is controlled by index.enabled/status.
     /// Missing/false are accepted for backward compatibility; true is rejected.
     let enabledByDefault: Bool?
@@ -218,6 +256,10 @@ struct DeclarativeSourceConfig: Codable, Identifiable {
     let discover: DeclarativeDiscoverConfig?
     let cleanup: DeclarativeCleanupConfig?
     let tests: DeclarativeSourceTests?
+}
+
+struct DeclarativeIdentityConfig: Codable {
+    let preserveQueryItems: [String]?
 }
 
 struct DeclarativeSourceSupports: Codable {
@@ -443,6 +485,10 @@ struct DeclarativeRepositoryTestExpected: Codable {
 }
 
 extension DeclarativeSourceConfig {
+    func engineMode(for operation: DeclarativeSourceOperation) -> DeclarativeEngineMode {
+        operationModes?.mode(for: operation) ?? engineMode
+    }
+
     func replacingTests(_ tests: DeclarativeSourceTests) -> DeclarativeSourceConfig {
         DeclarativeSourceConfig(
             schemaVersion: schemaVersion,
@@ -452,6 +498,8 @@ extension DeclarativeSourceConfig {
             language: language,
             baseURL: baseURL,
             engineMode: engineMode,
+            operationModes: operationModes,
+            identity: identity,
             enabledByDefault: enabledByDefault,
             experimental: experimental,
             allowedDomains: allowedDomains,
@@ -478,6 +526,10 @@ struct DeclarativeAPIConfig: Codable {
 
 struct DeclarativeAPIRequest: Codable {
     let method: String?
+    /// Optional operation-specific origin. This enables a source to keep its
+    /// HTML website as `baseURL` while calling a public JSON endpoint hosted on
+    /// another declared domain.
+    let baseURL: URL?
     let path: String
     let query: [String: DeclarativeJSONValue]?
 }
@@ -529,8 +581,27 @@ struct DeclarativeAPIChapterOperation: Codable {
     let idPath: String
     let numberPath: String
     let titlePath: String?
+    /// Optional JSON path containing the canonical reader URL for an episode.
+    /// It is resolved against the source base URL and persisted on Chapter so a
+    /// following HTML pages operation can open it.
+    let urlPath: String?
     let languagePath: String?
+    /// Declarative variables extracted from the canonical manga URL or manga ID
+    /// before expanding the API request path/query.
+    let variables: [String: DeclarativeAPIVariableRule]?
     let sort: String?
+}
+
+struct DeclarativeAPIVariableRule: Codable {
+    let from: String
+    let regex: String?
+    let defaultValue: String?
+
+    enum CodingKeys: String, CodingKey {
+        case from
+        case regex
+        case defaultValue = "default"
+    }
 }
 
 struct DeclarativeAPIPagination: Codable {
@@ -565,7 +636,6 @@ struct DeclarativeRemoteConfigDiagnostics {
         case unknown
         case remote
         case cache
-        case bundled
         case offline
         case invalidRemote
     }

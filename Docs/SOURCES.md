@@ -20,9 +20,10 @@ Valid definitions are cached locally.
 
 The source loader should prefer:
 
-1. latest valid remote definitions;
-2. cached definitions from the last successful refresh;
-3. bundled fallback definitions when they exist.
+1. latest valid definitions published by `Yomuhon-Sources`;
+2. definitions cached from the last successful repository refresh.
+
+Yomuhon ships no provider definitions and no provider-specific adapters. On a fresh installation without network access, the catalog is empty until the repository can be reached. The cache contains only definitions that were previously downloaded from GitHub.
 
 A failure in one definition must not invalidate the complete source catalog.
 
@@ -111,3 +112,37 @@ Source configuration versions fingerprint source-dependent caches.
 When a source definition changes, stale search/detail/page cache entries may be invalidated.
 
 Explicit offline downloads must not be deleted as ordinary cache.
+
+## Mixed-operation sources
+
+A provider may expose different public interfaces for different operations. A source can keep a source-wide `engineMode` and override only selected capabilities with `operationModes`:
+
+```json
+{
+  "engineMode": "html",
+  "operationModes": {
+    "chapters": "json-api"
+  }
+}
+```
+
+Supported operation keys are `popular`, `search`, `details`, `chapters`, `pages` and `genres`. Existing definitions without `operationModes` keep their previous behavior.
+
+An API request may declare its own HTTPS `baseURL` when the public JSON endpoint uses a different host from the HTML website. Chapter API operations can also:
+
+- derive variables declaratively from `mangaURL` or `mangaID`;
+- store a public reader URL from `urlPath` on each chapter;
+- hand that chapter URL back to an HTML pages operation.
+
+Some providers encode the stable work identifier in a query parameter. `identity.preserveQueryItems` declares only the public query names that must survive canonicalization:
+
+```json
+{
+  "identity": {
+    "preserveQueryItems": ["title_no"]
+  }
+}
+```
+
+All other query items are still removed. This contract remains declarative and repository-controlled; it does not add provider adapters or bundled source definitions to the app.
+

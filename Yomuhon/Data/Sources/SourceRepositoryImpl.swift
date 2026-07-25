@@ -19,7 +19,7 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
 
     static var defaultSources: [Source] {
         // Production sources are discovered exclusively from Yomuhon-Sources.
-        // The app ships runtimes, never provider adapters.
+        // The app ships the generic runtime, never provider definitions or adapters.
         []
     }
 
@@ -584,9 +584,10 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
     }
 
     private func repairLegacyMangaIfNeeded(_ manga: Manga, using source: Source) -> Manga {
-        let legacySourceIDs: Set<String> = ["mangapill", "mangakatana"]
-
-        guard legacySourceIDs.contains(manga.sourceID),
+        // Old library entries may refer to a pre-repository alias such as a
+        // source ID without its runtime suffix. Repair any generic family match;
+        // provider names never belong in app code.
+        guard manga.sourceID.caseInsensitiveCompare(source.id) != .orderedSame,
               manga.hasYomuhonSourceURLMarker == false,
               let repaired = repairMangaFromSearch(manga, using: source)
         else {
@@ -616,22 +617,20 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
     private func source(for manga: Manga) -> Source? {
         let sources = allResolvableSources()
 
-        if let exact = sources.first(where: { $0.id == manga.sourceID }) {
+        if let exact = sources.first(where: {
+            $0.id.caseInsensitiveCompare(manga.sourceID) == .orderedSame
+        }) {
             return exact
         }
 
-        let repositorySourceID: String?
-        switch manga.sourceID.lowercased() {
-        case "mangapill":
-            repositorySourceID = "mangapill_json"
-        case "mangakatana":
-            repositorySourceID = "mangakatana_json"
-        default:
-            repositorySourceID = nil
-        }
+        let requestedFamily = NativeSourceCatalog.canonicalFamily(
+            for: manga.sourceID,
+            name: manga.sourceID
+        )
 
-        guard let repositorySourceID else { return nil }
-        return sources.first(where: { $0.id == repositorySourceID })
+        return sources.first { source in
+            NativeSourceCatalog.canonicalFamily(for: source.id, name: source.name) == requestedFamily
+        }
     }
 }
 

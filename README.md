@@ -21,7 +21,9 @@ Yomuhon already includes:
 - Persistent download queue with pause, retry and launch recovery.
 - Offline chapter reading.
 - Remote declarative source discovery through `Yomuhon-Sources`.
-- Local caching of valid source definitions for resilience.
+- Per-operation source runtimes, allowing one remote definition to use HTML for catalog/reader pages and JSON for chapters without provider-specific Swift.
+- Local caching of definitions previously downloaded from GitHub for resilience.
+- No provider definitions or provider-specific adapters embedded in the app.
 - English and Spanish localization.
 - macOS, iPhone and iPad presentation paths.
 

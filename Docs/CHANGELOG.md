@@ -6,6 +6,15 @@ It intentionally does not record every compile fix or one-line patch.
 
 ## Unreleased
 
+### Hybrid declarative operations
+
+- Added optional per-operation `html` / `json-api` runtime selection.
+- Added operation-specific API base URLs.
+- Added declarative API variables extracted from canonical manga URLs or IDs.
+- Added API chapter reader URLs so HTML page extraction can follow JSON chapter discovery.
+- Added selective preservation of stable public query identifiers during URL canonicalization.
+- Added regression coverage for HTML Search/Detail/Pages combined with JSON Chapters.
+
 ### Source engine v2
 
 - Moved provider discovery toward repository-driven declarative definitions.
@@ -17,6 +26,7 @@ It intentionally does not record every compile fix or one-line patch.
 
 ### Source resilience
 
+- Confirmed remote-only source delivery: no provider definitions are embedded; first launch refreshes `Yomuhon-Sources` immediately and only previously downloaded definitions may be cached.
 - Added bounded source health checking.
 - Removed the requirement for normal users to press Test before reading.
 - Search uses healthy sources.

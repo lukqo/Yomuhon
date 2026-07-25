@@ -400,7 +400,6 @@
 "sources.remote.state.unknown" = "Remote source state unknown";
 "sources.remote.state.remote" = "Using latest GitHub source index";
 "sources.remote.state.cache" = "Using cached GitHub sources";
-"sources.remote.state.bundled" = "Using bundled fallback sources";
 "sources.remote.state.offline" = "GitHub unavailable, using fallback sources";
 "sources.remote.state.badSchema" = "GitHub index schema unsupported, using fallback sources";
 "sources.remote.state.noValidConfigs" = "No valid GitHub configs, using fallback sources";

@@ -59,7 +59,7 @@ struct DeclarativeSourceRuntime: Source {
     func popularManga() throws -> [Manga] {
         guard supportsPopularDiscovery else { return [] }
 
-        if config.engineMode == .jsonAPI {
+        if config.engineMode(for: .popular) == .jsonAPI {
             guard let operation = config.discover?.popular?.api else {
                 throw DeclarativeSourceError.missingRoute("discover.popular.api")
             }
@@ -97,7 +97,7 @@ struct DeclarativeSourceRuntime: Source {
         }
 
         let variables = ["genre": item.value]
-        if config.engineMode == .jsonAPI {
+        if config.engineMode(for: .genres) == .jsonAPI {
             guard let operation = genres.operation.api else {
                 throw DeclarativeSourceError.missingRoute("discover.genres.operation.api")
             }
@@ -125,8 +125,9 @@ struct DeclarativeSourceRuntime: Source {
     }
 
     func searchManga(query: String) throws -> [Manga] {
-        SourceDebugTrace.log("Runtime", "source=\(id) SEARCH engine=\(config.engineMode.rawValue) query=\(query)")
-        if config.engineMode == .jsonAPI {
+        let searchMode = config.engineMode(for: .search)
+        SourceDebugTrace.log("Runtime", "source=\(id) SEARCH engine=\(searchMode.rawValue) query=\(query)")
+        if searchMode == .jsonAPI {
             let mangas = try JSONAPISourceExecutor(config: config, dataLoader: dataLoader).search(query: query)
             SourceDebugTrace.log("Runtime", "source=\(id) SEARCH json count=\(mangas.count)")
             return mangas
@@ -150,9 +151,9 @@ struct DeclarativeSourceRuntime: Source {
     func fetchDetails(for manga: Manga) throws -> Manga {
         SourceDebugTrace.log(
             "Runtime",
-            "source=\(id) DETAIL start mangaID=\(manga.id) title=\(manga.title) marker=\(manga.declarativeSourceURL?.absoluteString ?? "nil") engine=\(config.engineMode.rawValue)"
+            "source=\(id) DETAIL start mangaID=\(manga.id) title=\(manga.title) marker=\(manga.declarativeSourceURL?.absoluteString ?? "nil") engine=\(config.engineMode(for: .details).rawValue) chaptersEngine=\(config.engineMode(for: .chapters).rawValue)"
         )
-        if config.engineMode == .jsonAPI {
+        if config.engineMode(for: .details) == .jsonAPI {
             var copy = manga
             copy.chapters = try JSONAPISourceExecutor(config: config, dataLoader: dataLoader).chapters(for: manga)
             SourceDebugTrace.log("Runtime", "source=\(id) DETAIL json chapters=\(copy.chapters.count)")
@@ -194,9 +195,18 @@ struct DeclarativeSourceRuntime: Source {
             ?? manga.releaseYear
 
         let resolvedChapters: [Chapter]
-        if config.supports.chapters, let chapterSelector = config.selectors.chapters {
-            resolvedChapters = parseChapters(document: document, manga: manga, mangaURL: mangaURL, selector: chapterSelector)
-            SourceDebugTrace.log("Runtime", "source=\(id) DETAIL parsedChapters=\(resolvedChapters.count)")
+        if config.supports.chapters {
+            if config.engineMode(for: .chapters) == .jsonAPI {
+                resolvedChapters = try JSONAPISourceExecutor(config: config, dataLoader: dataLoader)
+                    .chapters(for: manga)
+                SourceDebugTrace.log("Runtime", "source=\(id) DETAIL apiChapters=\(resolvedChapters.count)")
+            } else if let chapterSelector = config.selectors.chapters {
+                resolvedChapters = parseChapters(document: document, manga: manga, mangaURL: mangaURL, selector: chapterSelector)
+                SourceDebugTrace.log("Runtime", "source=\(id) DETAIL parsedChapters=\(resolvedChapters.count)")
+            } else {
+                throw DeclarativeSourceError.missingSelector("chapters")
+            }
+
             guard !resolvedChapters.isEmpty else {
                 throw DeclarativeSourceError.noResults("chapters")
             }
@@ -219,7 +229,9 @@ struct DeclarativeSourceRuntime: Source {
     }
 
     func fetchChapters(for manga: Manga) throws -> [Chapter] {
-        if config.engineMode == .jsonAPI { return try JSONAPISourceExecutor(config: config, dataLoader: dataLoader).chapters(for: manga) }
+        if config.engineMode(for: .chapters) == .jsonAPI {
+            return try JSONAPISourceExecutor(config: config, dataLoader: dataLoader).chapters(for: manga)
+        }
         guard config.supports.chapters else { return manga.chapters }
         guard let selector = config.selectors.chapters else {
             throw DeclarativeSourceError.missingSelector("chapters")
@@ -237,7 +249,7 @@ struct DeclarativeSourceRuntime: Source {
     }
 
     func fetchPages(for chapter: Chapter, manga: Manga) throws -> [Page] {
-        if config.engineMode == .jsonAPI {
+        if config.engineMode(for: .pages) == .jsonAPI {
             SourceDebugTrace.log(
                 "Pages",
                 "source=\(id) START engine=json-api manga=\(manga.id) chapter=\(chapter.id) number=\(chapter.number)"
@@ -467,7 +479,19 @@ struct DeclarativeSourceRuntime: Source {
         }
 
         components.path = "/" + parts.joined(separator: "/")
-        components.query = nil
+
+        let preservedNames = Set(
+            (config.identity?.preserveQueryItems ?? []).map { $0.lowercased() }
+        )
+        if preservedNames.isEmpty {
+            components.query = nil
+        } else {
+            let preservedItems = (components.queryItems ?? []).filter { item in
+                preservedNames.contains(item.name.lowercased())
+            }
+            components.queryItems = preservedItems.isEmpty ? nil : preservedItems
+        }
+
         components.fragment = nil
         return components.url ?? url
     }
@@ -1213,7 +1237,11 @@ private struct JSONAPISourceExecutor {
 
     func chapters(for manga: Manga) throws -> [Chapter] {
         guard let operation = config.api?.chapters else { throw DeclarativeSourceError.missingRoute("api.chapters") }
-        var variables = ["mangaID": manga.id]
+        var variables = [
+            "mangaID": manga.id,
+            "mangaURL": manga.declarativeSourceURL?.absoluteString ?? ""
+        ]
+        variables.merge(resolveVariables(operation.variables, manga: manga)) { _, new in new }
         let preferred = SourceLanguagePreferenceStore.shared.exactLanguageOverride(mangaID: manga.id, sourceID: config.id)
             .map { [$0] } ?? SourceLanguagePreferenceStore.shared.languageCodes(for: config.id)
         variables["languages"] = preferred.joined(separator: ",")
@@ -1278,10 +1306,32 @@ private struct JSONAPISourceExecutor {
         }
         var chapters = allItems.compactMap { item -> Chapter? in
             guard let id = JSONPath.string(operation.idPath, in: item) else { return nil }
-            if let languagePath = operation.languagePath, !preferred.isEmpty, let lang = JSONPath.string(languagePath, in: item), !preferred.contains(lang) { return nil }
+            if let languagePath = operation.languagePath,
+               !preferred.isEmpty,
+               let lang = JSONPath.string(languagePath, in: item),
+               !preferred.contains(lang) {
+                return nil
+            }
             let number = JSONPath.string(operation.numberPath, in: item).flatMap(Double.init) ?? 0
             let title = operation.titlePath.flatMap { JSONPath.string($0, in: item) }
-            return Chapter(id: id, mangaID: manga.id, number: number, title: title, pages: [], isDownloaded: false)
+            let chapter = Chapter(
+                id: id,
+                mangaID: manga.id,
+                number: number,
+                title: title,
+                pages: [],
+                isDownloaded: false
+            )
+
+            guard let urlPath = operation.urlPath,
+                  let rawURL = JSONPath.string(urlPath, in: item),
+                  let candidate = URL(string: rawURL, relativeTo: config.baseURL)?.absoluteURL,
+                  let url = permittedPublicURL(candidate, context: "chapter")
+            else {
+                return chapter
+            }
+
+            return chapter.withDeclarativeSourceURL(url)
         }
         if operation.sort == "numberAscending" { chapters.sort { $0.number < $1.number } }
         return chapters
@@ -1310,6 +1360,50 @@ private struct JSONAPISourceExecutor {
         return urls.enumerated().map { Page(id: "\(chapter.id)-\($0.offset)", index: $0.offset, imageURL: $0.element, localFileURL: nil) }
     }
 
+    private func resolveVariables(
+        _ rules: [String: DeclarativeAPIVariableRule]?,
+        manga: Manga
+    ) -> [String: String] {
+        guard let rules else { return [:] }
+        var output: [String: String] = [:]
+
+        for (name, rule) in rules {
+            let source: String
+            switch rule.from {
+            case "mangaID":
+                source = manga.id
+            case "mangaURL":
+                source = manga.declarativeSourceURL?.absoluteString ?? ""
+            default:
+                source = ""
+            }
+
+            var value: String?
+            if let pattern = rule.regex,
+               let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+               let match = regex.firstMatch(
+                    in: source,
+                    range: NSRange(source.startIndex..., in: source)
+               ) {
+                let captureIndex = match.numberOfRanges > 1 ? 1 : 0
+                if let range = Range(match.range(at: captureIndex), in: source) {
+                    value = String(source[range])
+                }
+            } else if !source.isEmpty {
+                value = source
+            }
+
+            if let resolved = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !resolved.isEmpty {
+                output[name] = resolved
+            } else if let fallback = rule.defaultValue {
+                output[name] = fallback
+            }
+        }
+
+        return output
+    }
+
     private func load(
         _ request: DeclarativeAPIRequest,
         variables: [String: String],
@@ -1317,7 +1411,12 @@ private struct JSONAPISourceExecutor {
         extraQueryItems: [URLQueryItem] = []
     ) throws -> Any {
         let path = expand(request.path, variables: variables)
-        guard let base = URL(string: path, relativeTo: config.baseURL)?.absoluteURL, var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { throw DeclarativeSourceError.invalidURL(path) }
+        let requestBaseURL = request.baseURL ?? config.baseURL
+        guard let base = URL(string: path, relativeTo: requestBaseURL)?.absoluteURL,
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        else {
+            throw DeclarativeSourceError.invalidURL(path)
+        }
         var queryItems = components.queryItems ?? []
         queryItems.append(contentsOf: extraQueryItems)
         for (key, value) in request.query ?? [:] {
