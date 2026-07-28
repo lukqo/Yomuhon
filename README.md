@@ -64,6 +64,15 @@ Yomuhon.xcodeproj
 
 Select the Yomuhon scheme and run the appropriate macOS or iOS/iPadOS destination in Xcode 14.2.
 
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+code guidelines and how to submit a PR. For manga source issues or new
+sources, use [Yomuhon-Sources](https://github.com/lukqo/Yomuhon-Sources)
+instead.
+
+Yomuhon is licensed under the [MIT License](LICENSE).
+
 ## Project rule
 
 A feature is not complete because it compiles.
