@@ -67,5 +67,4 @@ Use the issue templates. Include:
 
 ## Code of conduct
 
-Be respectful and constructive. Disagreements about approach are fine;
-personal attacks are not.
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
