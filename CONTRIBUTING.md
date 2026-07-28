@@ -27,8 +27,12 @@ project explicitly migrates its deployment target.
 
 1. Fork the repo and clone your fork.
 2. Open `Yomuhon.xcodeproj` in Xcode 14.2.
-3. Select the `Yomuhon` scheme and run on macOS or an iOS/iPadOS simulator.
-4. Source definitions are fetched from [Yomuhon-Sources](https://github.com/lukqo/Yomuhon-Sources)
+3. In **Signing & Capabilities**, select your own Team under "Team" for each
+   target (the repo doesn't ship a Development Team, so Xcode will prompt
+   you to pick one — any free personal team works for local builds/simulator
+   runs).
+4. Select the `Yomuhon` scheme and run on macOS or an iOS/iPadOS simulator.
+5. Source definitions are fetched from [Yomuhon-Sources](https://github.com/lukqo/Yomuhon-Sources)
    at runtime — you don't need to touch that repo unless you're adding or
    fixing a manga source, which lives there, not in this app.
 
