@@ -15,17 +15,15 @@
 		4904CCED2FF370610022F6B5 /* YomuhonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4904CCEC2FF370610022F6B5 /* YomuhonTests.swift */; };
 		4904CCF72FF370610022F6B5 /* YomuhonUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4904CCF62FF370610022F6B5 /* YomuhonUITests.swift */; };
 		4904CCF92FF370610022F6B5 /* YomuhonUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4904CCF82FF370610022F6B5 /* YomuhonUITestsLaunchTests.swift */; };
+		969F4DA6A63BC9480C800984 /* MangaDetailNavigationTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0FA4022061BA1FE03DF4BED /* MangaDetailNavigationTrigger.swift */; };
 		C0D300012FF37A0000010001 /* Manga.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301012FF37A0000010001 /* Manga.swift */; };
 		C0D300022FF37A0000010001 /* LibraryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301022FF37A0000010001 /* LibraryRepository.swift */; };
 		C0D300032FF37A0000010001 /* GetLibraryUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301032FF37A0000010001 /* GetLibraryUseCase.swift */; };
 		C0D300052FF37A0000010001 /* LibraryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301052FF37A0000010001 /* LibraryViewModel.swift */; };
 		C0D300062FF37A0000010001 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301062FF37A0000010001 /* LibraryView.swift */; };
-		C0D6A0012FF3D10000010001 /* ContinueReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D6A0022FF3D10000010001 /* ContinueReadingView.swift */; };
-		C0D6A0032FF3D10000010001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D6A0042FF3D10000010001 /* OnboardingView.swift */; };
 		C0D300072FF37A0000010001 /* MangaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301072FF37A0000010001 /* MangaDetailView.swift */; };
 		C0D300082FF37A0000010001 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301082FF37A0000010001 /* ReaderView.swift */; };
 		C0D300092FF37A0000010001 /* CoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301092FF37A0000010001 /* CoverView.swift */; };
-		969F4DA6A63BC9480C800984 /* MangaDetailNavigationTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0FA4022061BA1FE03DF4BED /* MangaDetailNavigationTrigger.swift */; };
 		C0D3000A2FF37A0000010001 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3010A2FF37A0000010001 /* EmptyStateView.swift */; };
 		C0D3000B2FF37A0000010001 /* Page.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3010B2FF37A0000010001 /* Page.swift */; };
 		C0D3000C2FF37A0000010001 /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3010C2FF37A0000010001 /* Chapter.swift */; };
@@ -40,12 +38,11 @@
 		C0D300152FF37A0000010001 /* SearchMangaUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301152FF37A0000010001 /* SearchMangaUseCase.swift */; };
 		C0D300162FF37A0000010001 /* GetChapterListUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301162FF37A0000010001 /* GetChapterListUseCase.swift */; };
 		C0D300172FF37A0000010001 /* DownloadChapterUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301172FF37A0000010001 /* DownloadChapterUseCase.swift */; };
+		A1B2C3012FF3900000010001 /* SourceCatalogUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3002FF3900000010001 /* SourceCatalogUseCase.swift */; };
+		A1B2C3032FF3900000010001 /* SourceCatalogViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3022FF3900000010001 /* SourceCatalogViewModel.swift */; };
+		A1B2C3052FF3900000010001 /* SourceCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3042FF3900000010001 /* SourceCatalogView.swift */; };
 		C0D300182FF37A0000010001 /* UpdateReadingProgressUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301182FF37A0000010001 /* UpdateReadingProgressUseCase.swift */; };
 		C0D300192FF37A0000010001 /* SourceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301192FF37A0000010001 /* SourceProtocol.swift */; };
-		D1E000012FF5000000010001 /* DeclarativeSourceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E001012FF5000000010001 /* DeclarativeSourceModels.swift */; };
-		D1E000022FF5000000010001 /* SimpleHTMLDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E001022FF5000000010001 /* SimpleHTMLDocument.swift */; };
-		D1E000032FF5000000010001 /* DeclarativeSourceRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E001032FF5000000010001 /* DeclarativeSourceRuntime.swift */; };
-		D1E000042FF5000000010001 /* RemoteSourceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E001042FF5000000010001 /* RemoteSourceCatalog.swift */; };
 		C0D3001B2FF37A0000010001 /* SourceRepositoryImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3011B2FF37A0000010001 /* SourceRepositoryImpl.swift */; };
 		C0D3001C2FF37A0000010001 /* HTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3011C2FF37A0000010001 /* HTTPClient.swift */; };
 		C0D3001D2FF37A0000010001 /* DownloadRepositoryImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3011D2FF37A0000010001 /* DownloadRepositoryImpl.swift */; };
@@ -58,6 +55,8 @@
 		C0D500022FF3B00000010001 /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D500012FF3B00000010001 /* DownloadsView.swift */; };
 		C0D600032FF3C00000010001 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D600012FF3C00000010001 /* SearchView.swift */; };
 		C0D600042FF3C00000010001 /* SearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D600022FF3C00000010001 /* SearchViewModel.swift */; };
+		C0D6A0012FF3D10000010001 /* ContinueReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D6A0022FF3D10000010001 /* ContinueReadingView.swift */; };
+		C0D6A0032FF3D10000010001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D6A0042FF3D10000010001 /* OnboardingView.swift */; };
 		C0D700022FF3D00000010001 /* YomuhonComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D700012FF3D00000010001 /* YomuhonComponents.swift */; };
 		C0D900042FF4000000010001 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D900012FF4000000010001 /* RootView.swift */; };
 		C0D900052FF4000000010001 /* RegularRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D900022FF4000000010001 /* RegularRootView.swift */; };
@@ -68,7 +67,10 @@
 		C0DA000A2FF4100000010001 /* YomuhonListComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DA00042FF4100000010001 /* YomuhonListComponents.swift */; };
 		C0DA000B2FF4100000010001 /* YomuhonFeedbackComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DA00052FF4100000010001 /* YomuhonFeedbackComponents.swift */; };
 		C0DA000C2FF4100000010001 /* YomuhonReaderComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DA00062FF4100000010001 /* YomuhonReaderComponents.swift */; };
-
+		D1E000012FF5000000010001 /* DeclarativeSourceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E001012FF5000000010001 /* DeclarativeSourceModels.swift */; };
+		D1E000022FF5000000010001 /* SimpleHTMLDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E001022FF5000000010001 /* SimpleHTMLDocument.swift */; };
+		D1E000032FF5000000010001 /* DeclarativeSourceRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E001032FF5000000010001 /* DeclarativeSourceRuntime.swift */; };
+		D1E000042FF5000000010001 /* RemoteSourceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E001042FF5000000010001 /* RemoteSourceCatalog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -106,12 +108,9 @@
 		C0D301032FF37A0000010001 /* GetLibraryUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetLibraryUseCase.swift; sourceTree = "<group>"; };
 		C0D301052FF37A0000010001 /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
 		C0D301062FF37A0000010001 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
-		C0D6A0022FF3D10000010001 /* ContinueReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueReadingView.swift; sourceTree = "<group>"; };
-		C0D6A0042FF3D10000010001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C0D301072FF37A0000010001 /* MangaDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaDetailView.swift; sourceTree = "<group>"; };
 		C0D301082FF37A0000010001 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
 		C0D301092FF37A0000010001 /* CoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverView.swift; sourceTree = "<group>"; };
-		D0FA4022061BA1FE03DF4BED /* MangaDetailNavigationTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaDetailNavigationTrigger.swift; sourceTree = "<group>"; };
 		C0D3010A2FF37A0000010001 /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		C0D3010B2FF37A0000010001 /* Page.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Page.swift; sourceTree = "<group>"; };
 		C0D3010C2FF37A0000010001 /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
@@ -126,12 +125,11 @@
 		C0D301152FF37A0000010001 /* SearchMangaUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchMangaUseCase.swift; sourceTree = "<group>"; };
 		C0D301162FF37A0000010001 /* GetChapterListUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetChapterListUseCase.swift; sourceTree = "<group>"; };
 		C0D301172FF37A0000010001 /* DownloadChapterUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadChapterUseCase.swift; sourceTree = "<group>"; };
+		A1B2C3002FF3900000010001 /* SourceCatalogUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogUseCase.swift; sourceTree = "<group>"; };
+		A1B2C3022FF3900000010001 /* SourceCatalogViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogViewModel.swift; sourceTree = "<group>"; };
+		A1B2C3042FF3900000010001 /* SourceCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogView.swift; sourceTree = "<group>"; };
 		C0D301182FF37A0000010001 /* UpdateReadingProgressUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateReadingProgressUseCase.swift; sourceTree = "<group>"; };
 		C0D301192FF37A0000010001 /* SourceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceProtocol.swift; sourceTree = "<group>"; };
-		D1E001012FF5000000010001 /* DeclarativeSourceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclarativeSourceModels.swift; sourceTree = "<group>"; };
-		D1E001022FF5000000010001 /* SimpleHTMLDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleHTMLDocument.swift; sourceTree = "<group>"; };
-		D1E001032FF5000000010001 /* DeclarativeSourceRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclarativeSourceRuntime.swift; sourceTree = "<group>"; };
-		D1E001042FF5000000010001 /* RemoteSourceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSourceCatalog.swift; sourceTree = "<group>"; };
 		C0D3011B2FF37A0000010001 /* SourceRepositoryImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceRepositoryImpl.swift; sourceTree = "<group>"; };
 		C0D3011C2FF37A0000010001 /* HTTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPClient.swift; sourceTree = "<group>"; };
 		C0D3011D2FF37A0000010001 /* DownloadRepositoryImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadRepositoryImpl.swift; sourceTree = "<group>"; };
@@ -145,6 +143,8 @@
 		C0D500012FF3B00000010001 /* DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
 		C0D600012FF3C00000010001 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		C0D600022FF3C00000010001 /* SearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViewModel.swift; sourceTree = "<group>"; };
+		C0D6A0022FF3D10000010001 /* ContinueReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueReadingView.swift; sourceTree = "<group>"; };
+		C0D6A0042FF3D10000010001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C0D700012FF3D00000010001 /* YomuhonComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YomuhonComponents.swift; sourceTree = "<group>"; };
 		C0D900012FF4000000010001 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C0D900022FF4000000010001 /* RegularRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegularRootView.swift; sourceTree = "<group>"; };
@@ -155,7 +155,11 @@
 		C0DA00042FF4100000010001 /* YomuhonListComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YomuhonListComponents.swift; sourceTree = "<group>"; };
 		C0DA00052FF4100000010001 /* YomuhonFeedbackComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YomuhonFeedbackComponents.swift; sourceTree = "<group>"; };
 		C0DA00062FF4100000010001 /* YomuhonReaderComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YomuhonReaderComponents.swift; sourceTree = "<group>"; };
-
+		D0FA4022061BA1FE03DF4BED /* MangaDetailNavigationTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaDetailNavigationTrigger.swift; sourceTree = "<group>"; };
+		D1E001012FF5000000010001 /* DeclarativeSourceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclarativeSourceModels.swift; sourceTree = "<group>"; };
+		D1E001022FF5000000010001 /* SimpleHTMLDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleHTMLDocument.swift; sourceTree = "<group>"; };
+		D1E001032FF5000000010001 /* DeclarativeSourceRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclarativeSourceRuntime.swift; sourceTree = "<group>"; };
+		D1E001042FF5000000010001 /* RemoteSourceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSourceCatalog.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -276,6 +280,7 @@
 				C0D301162FF37A0000010001 /* GetChapterListUseCase.swift */,
 				C0D301172FF37A0000010001 /* DownloadChapterUseCase.swift */,
 				C0D301182FF37A0000010001 /* UpdateReadingProgressUseCase.swift */,
+				A1B2C3002FF3900000010001 /* SourceCatalogUseCase.swift */,
 			);
 			path = UseCases;
 			sourceTree = "<group>";
@@ -309,31 +314,13 @@
 				C0D500032FF3B00000010001 /* Downloads */,
 				C0D600052FF3C00000010001 /* Search */,
 				C0D302142FF37A0000010001 /* Sources */,
+				A1B2C3062FF3900000010001 /* SourceCatalog */,
 				4904CD112FF371BE0022F6B5 /* MangaDetail */,
 				4904CD102FF371B80022F6B5 /* Reader */,
 				4904CD0F2FF371B10022F6B5 /* Library */,
 				C0D6A0052FF3D10000010001 /* Onboarding */,
 			);
 			path = Presentation;
-			sourceTree = "<group>";
-		};
-		C0D6A0052FF3D10000010001 /* Onboarding */ = {
-			isa = PBXGroup;
-			children = (
-				C0D6A0042FF3D10000010001 /* OnboardingView.swift */,
-			);
-			path = Onboarding;
-			sourceTree = "<group>";
-		};
-		C0D900002FF4000000010001 /* Shell */ = {
-			isa = PBXGroup;
-			children = (
-				C0D900012FF4000000010001 /* RootView.swift */,
-				C0D900022FF4000000010001 /* RegularRootView.swift */,
-				C0D900032FF4000000010001 /* CompactRootView.swift */,
-				C0DA00012FF4100000010001 /* PresentationCompositionRoot.swift */,
-			);
-			path = Shell;
 			sourceTree = "<group>";
 		};
 		4904CD0B2FF3716C0022F6B5 /* Platform */ = {
@@ -415,22 +402,6 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
-		C0D700032FF3D00000010001 /* Components */ = {
-			isa = PBXGroup;
-			children = (
-				C0D301092FF37A0000010001 /* CoverView.swift */,
-				D0FA4022061BA1FE03DF4BED /* MangaDetailNavigationTrigger.swift */,
-				C0D3010A2FF37A0000010001 /* EmptyStateView.swift */,
-				C0D700012FF3D00000010001 /* YomuhonComponents.swift */,
-				C0DA00022FF4100000010001 /* YomuhonNavigationComponents.swift */,
-				C0DA00032FF4100000010001 /* YomuhonContentComponents.swift */,
-				C0DA00042FF4100000010001 /* YomuhonListComponents.swift */,
-				C0DA00052FF4100000010001 /* YomuhonFeedbackComponents.swift */,
-				C0DA00062FF4100000010001 /* YomuhonReaderComponents.swift */,
-			);
-			path = Components;
-			sourceTree = "<group>";
-		};
 		4904CD132FF371D50022F6B5 /* macOS */ = {
 			isa = PBXGroup;
 			children = (
@@ -445,14 +416,6 @@
 			path = "iOS-iPadOS";
 			sourceTree = "<group>";
 		};
-		C0D800032FF3E00000010001 /* MangaDex */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = MangaDex;
-			sourceTree = "<group>";
-		};
-
 		C0D302142FF37A0000010001 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -460,6 +423,15 @@
 				C0D301202FF37A0000010001 /* SourcesViewModel.swift */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		A1B2C3062FF3900000010001 /* SourceCatalog */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3022FF3900000010001 /* SourceCatalogViewModel.swift */,
+				A1B2C3042FF3900000010001 /* SourceCatalogView.swift */,
+			);
+			path = SourceCatalog;
 			sourceTree = "<group>";
 		};
 		C0D400072FF3A00000010001 /* Settings */ = {
@@ -485,6 +457,48 @@
 				C0D600022FF3C00000010001 /* SearchViewModel.swift */,
 			);
 			path = Search;
+			sourceTree = "<group>";
+		};
+		C0D6A0052FF3D10000010001 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				C0D6A0042FF3D10000010001 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		C0D700032FF3D00000010001 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				C0D301092FF37A0000010001 /* CoverView.swift */,
+				D0FA4022061BA1FE03DF4BED /* MangaDetailNavigationTrigger.swift */,
+				C0D3010A2FF37A0000010001 /* EmptyStateView.swift */,
+				C0D700012FF3D00000010001 /* YomuhonComponents.swift */,
+				C0DA00022FF4100000010001 /* YomuhonNavigationComponents.swift */,
+				C0DA00032FF4100000010001 /* YomuhonContentComponents.swift */,
+				C0DA00042FF4100000010001 /* YomuhonListComponents.swift */,
+				C0DA00052FF4100000010001 /* YomuhonFeedbackComponents.swift */,
+				C0DA00062FF4100000010001 /* YomuhonReaderComponents.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		C0D800032FF3E00000010001 /* MangaDex */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = MangaDex;
+			sourceTree = "<group>";
+		};
+		C0D900002FF4000000010001 /* Shell */ = {
+			isa = PBXGroup;
+			children = (
+				C0D900012FF4000000010001 /* RootView.swift */,
+				C0D900022FF4000000010001 /* RegularRootView.swift */,
+				C0D900032FF4000000010001 /* CompactRootView.swift */,
+				C0DA00012FF4100000010001 /* PresentationCompositionRoot.swift */,
+			);
+			path = Shell;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -657,6 +671,9 @@
 				C0D300132FF37A0000010001 /* SourceRepository.swift in Sources */,
 				C0D300142FF37A0000010001 /* DownloadRepository.swift in Sources */,
 				C0D300182FF37A0000010001 /* UpdateReadingProgressUseCase.swift in Sources */,
+				A1B2C3012FF3900000010001 /* SourceCatalogUseCase.swift in Sources */,
+				A1B2C3032FF3900000010001 /* SourceCatalogViewModel.swift in Sources */,
+				A1B2C3052FF3900000010001 /* SourceCatalogView.swift in Sources */,
 				C0D300192FF37A0000010001 /* SourceProtocol.swift in Sources */,
 				D1E000012FF5000000010001 /* DeclarativeSourceModels.swift in Sources */,
 				D1E000022FF5000000010001 /* SimpleHTMLDocument.swift in Sources */,
@@ -841,7 +858,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Yomuhon/Preview Content\"";
-				DEVELOPMENT_TEAM = ZBWQ696B5Q;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -880,7 +897,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Yomuhon/Preview Content\"";
-				DEVELOPMENT_TEAM = ZBWQ696B5Q;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -916,7 +933,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZBWQ696B5Q;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				MACOSX_DEPLOYMENT_TARGET = 12.7;
@@ -939,7 +956,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZBWQ696B5Q;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				MACOSX_DEPLOYMENT_TARGET = 12.7;
@@ -961,7 +978,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZBWQ696B5Q;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				MACOSX_DEPLOYMENT_TARGET = 12.7;
@@ -983,7 +1000,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZBWQ696B5Q;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				MACOSX_DEPLOYMENT_TARGET = 12.7;
