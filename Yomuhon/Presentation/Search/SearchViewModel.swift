@@ -123,6 +123,9 @@ struct MangaSearchGroup: Identifiable, Equatable {
 final class SearchViewModel: ObservableObject {
     @Published var query = ""
     @Published private(set) var results: [Manga] = []
+    @Published private(set) var readableGroups: [MangaSearchGroup] = []
+    @Published private(set) var allGroups: [MangaSearchGroup] = []
+    @Published private(set) var catalogOnlyGroups: [MangaSearchGroup] = []
     @Published private(set) var isSearching = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var hasSearched = false
@@ -148,23 +151,7 @@ final class SearchViewModel: ObservableObject {
     private var activeDiscoveryToken: RequestCancellationToken?
     private var activeGenreToken: RequestCancellationToken?
     private var searchSourcePositions: [String: Int] = [:]
-    private var popularSourcePositions: [String: Int] = [:]
-    private var genreSourcePositions: [String: Int] = [:]
     private var stableSearchGroupOrder: [String] = []
-    private var popularStableOrder: [String] = []
-    private var genreStableOrder: [String] = []
-
-    // SwiftUI asks several search-derived properties during one body pass.
-    // Grouping previously repeated identity clustering and ranking each time.
-    // Cache the groups for the current search presentation revision instead.
-    private struct SearchGroupingCacheKey: Hashable {
-        let revision: Int
-        let query: String
-        let mangaKeys: [String]
-    }
-
-    private var searchPresentationRevision = 0
-    private var groupedMangaCache: [SearchGroupingCacheKey: [MangaSearchGroup]] = [:]
 
     init(searchMangaUseCase: SearchMangaUseCase) {
         self.searchMangaUseCase = searchMangaUseCase
@@ -191,34 +178,19 @@ final class SearchViewModel: ObservableObject {
     }
 
     var groupedResults: [MangaSearchGroup] {
-        readableGroupedResults
+        readableGroups
     }
 
     var readableGroupedResults: [MangaSearchGroup] {
-        groupedMangas(
-            from: results.filter { NativeSourceCatalog.supportsReading(sourceID: $0.sourceID) }
-        )
+        readableGroups
     }
 
     var catalogOnlyGroupedResults: [MangaSearchGroup] {
-        let readableGroups = readableGroupedResults
-        let catalogGroups = groupedMangas(
-            from: results.filter { manga in
-                !NativeSourceCatalog.supportsReading(sourceID: manga.sourceID)
-            }
-        )
-
-        return catalogGroups.filter { catalogGroup in
-            guard let catalogManga = catalogGroup.primaryManga else { return false }
-            return !readableGroups.contains { readableGroup in
-                guard let readableManga = readableGroup.primaryManga else { return false }
-                return MangaIdentityResolver.sameWork(catalogManga, readableManga)
-            }
-        }
+        catalogOnlyGroups
     }
 
     var hasCatalogOnlyResults: Bool {
-        !catalogOnlyGroupedResults.isEmpty
+        !catalogOnlyGroups.isEmpty
     }
 
     var availableSearchSourceFilters: [SearchSourceFilter] {
@@ -231,7 +203,7 @@ final class SearchViewModel: ObservableObject {
     }
 
     var activeReadableGroups: [MangaSearchGroup] {
-        let groups = onlyReadableResults ? readableGroupedResults : groupedMangas(from: results)
+        let groups = onlyReadableResults ? readableGroups : allGroups
         guard selectedSearchSourceID != "all" else {
             return groups
         }
@@ -240,118 +212,6 @@ final class SearchViewModel: ObservableObject {
             group.sourceIDs.contains(selectedSearchSourceID)
         }
     }
-
-    private func groupedMangas(from mangas: [Manga]) -> [MangaSearchGroup] {
-        let cacheKey = SearchGroupingCacheKey(
-            revision: searchPresentationRevision,
-            query: trimmedQuery,
-            mangaKeys: mangas.map { "\($0.sourceID)|\($0.id)" }.sorted()
-        )
-
-        if let cached = groupedMangaCache[cacheKey] {
-            return cached
-        }
-
-        let ranked = rankedMangaGroups(from: mangas)
-        let grouped: [MangaSearchGroup]
-
-        if stableSearchGroupOrder.isEmpty {
-            grouped = ranked
-        } else {
-            let stablePositions = Dictionary(
-                uniqueKeysWithValues: stableSearchGroupOrder.enumerated().map { ($0.element, $0.offset) }
-            )
-            let rankedPositions = Dictionary(
-                uniqueKeysWithValues: ranked.enumerated().map { ($0.element.id, $0.offset) }
-            )
-
-            grouped = ranked.sorted { lhs, rhs in
-                let lhsPosition = stablePositions[lhs.id] ?? rankedPositions[lhs.id] ?? Int.max
-                let rhsPosition = stablePositions[rhs.id] ?? rankedPositions[rhs.id] ?? Int.max
-                if lhsPosition != rhsPosition { return lhsPosition < rhsPosition }
-                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-            }
-        }
-
-        groupedMangaCache[cacheKey] = grouped
-        return grouped
-    }
-
-    private func invalidateSearchPresentation() {
-        searchPresentationRevision &+= 1
-        groupedMangaCache.removeAll(keepingCapacity: true)
-    }
-
-    private func rankedMangaGroups(from mangas: [Manga]) -> [MangaSearchGroup] {
-        let groups = MangaIdentityResolver
-            .clusters(from: mangas.filter { !$0.hasBadSearchTitle })
-            .map { mangas in
-                let ranked = mangas.sorted {
-                    searchResultRank(for: $0) > searchResultRank(for: $1)
-                }
-                return MangaSearchGroup(
-                    id: MangaIdentityResolver.clusterKey(for: ranked),
-                    mangas: ranked
-                )
-            }
-
-        let activeQuery = trimmedQuery
-        guard !activeQuery.isEmpty else {
-            return groups.sorted {
-                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
-            }
-        }
-
-        return groups.sorted { lhs, rhs in
-            let lhsScore = SearchResultRanker.groupScore(
-                query: activeQuery,
-                mangas: lhs.mangas,
-                sourcePositions: searchSourcePositions
-            )
-            let rhsScore = SearchResultRanker.groupScore(
-                query: activeQuery,
-                mangas: rhs.mangas,
-                sourcePositions: searchSourcePositions
-            )
-
-            if abs(lhsScore - rhsScore) > 0.0001 {
-                return lhsScore > rhsScore
-            }
-
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-        }
-    }
-
-    private func reconcileSearchOrder(query: String, settle: Bool) {
-        let ranked = rankedMangaGroups(from: results)
-        let scores = Dictionary(
-            uniqueKeysWithValues: ranked.map { group in
-                (
-                    group.id,
-                    SearchResultRanker.groupScore(
-                        query: query,
-                        mangas: group.mangas,
-                        sourcePositions: searchSourcePositions
-                    )
-                )
-            }
-        )
-        let dominantIDs = Set(scores.compactMap { entry in
-            entry.value >= 9_000 ? entry.key : nil
-        })
-
-        stableSearchGroupOrder = StableRankingReconciler.reconcile(
-            previous: stableSearchGroupOrder,
-            rankedIDs: ranked.map(\.id),
-            scores: scores,
-            dominantIDs: dominantIDs,
-            minimumPromotionDelta: 450,
-            relativePromotionDelta: 0.04,
-            settle: settle
-        )
-        invalidateSearchPresentation()
-    }
-
 
     func loadDiscovery() {
         refreshSourceAvailability()
@@ -369,61 +229,72 @@ final class SearchViewModel: ObservableObject {
         let cancellationToken = RequestCancellationToken()
         activeDiscoveryToken = cancellationToken
 
-        popularSourcePositions = [:]
-        popularStableOrder = []
         isLoadingDiscovery = true
 
+        Task { [weak self] in
+            await self?.processor.beginDiscoverySession(generation: generation)
+            self?.runDiscoveryWork(
+                generation: generation,
+                cancellationToken: cancellationToken,
+                useCase: useCase
+            )
+        }
+    }
+
+    private func runDiscoveryWork(
+        generation: Int,
+        cancellationToken: RequestCancellationToken,
+        useCase: SearchMangaUseCase
+    ) {
         DispatchQueue.global(qos: .utility).async {
             let popularResult = Result {
                 try useCase.popularManga(cancellationToken: cancellationToken) { progress in
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self, generation == self.discoveryGeneration else {
+                    Task { [weak self] in
+                        guard let self else { return }
+
+                        // Merging and stabilizing both happen inside the
+                        // actor's session state, so concurrent progress
+                        // updates from different sources never race on the
+                        // same underlying arrays.
+                        guard let stabilized = await self.processor.ingestDiscoveryProgress(
+                            generation: generation,
+                            incoming: progress.mangas,
+                            progressSourceID: progress.sourceID,
+                            limit: 12
+                        ) else {
                             return
                         }
 
-                        self.popularSourcePositions = Self.mergingSourcePositions(
-                            current: self.popularSourcePositions,
-                            mangas: progress.mangas,
-                            progressSourceID: progress.sourceID
-                        )
-                        let merged = self.mergingSearchResults(
-                            current: self.popularMangas,
-                            incoming: progress.mangas
-                        )
-                        let stabilized = self.stabilizedDiscoveryMangas(
-                            from: merged,
-                            limit: 12,
-                            sourcePositions: self.popularSourcePositions,
-                            previousOrder: self.popularStableOrder,
-                            settle: false
-                        )
-                        self.popularMangas = stabilized.mangas
-                        self.popularStableOrder = stabilized.order
+                        await MainActor.run {
+                            guard generation == self.discoveryGeneration else { return }
+                            self.popularMangas = stabilized.mangas
+                        }
                     }
                 }
             }
 
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self, generation == self.discoveryGeneration else {
-                    return
-                }
+            Task { [weak self] in
+                guard let self else { return }
 
                 if case .success(let mangas) = popularResult {
-                    let stabilized = self.stabilizedDiscoveryMangas(
-                        from: mangas,
-                        limit: 12,
-                        sourcePositions: self.popularSourcePositions,
-                        previousOrder: self.popularStableOrder,
-                        settle: true
-                    )
-                    self.popularMangas = stabilized.mangas
-                    self.popularStableOrder = stabilized.order
-                    self.logDiscoveryRanking(kind: "POPULAR", mangas: self.popularMangas)
+                    if let stabilized = await self.processor.finalizeDiscoverySession(
+                        generation: generation,
+                        mangas: mangas,
+                        limit: 12
+                    ) {
+                        await MainActor.run {
+                            guard generation == self.discoveryGeneration else { return }
+                            self.popularMangas = stabilized.mangas
+                            self.logDiscoveryRanking(kind: "POPULAR", mangas: self.popularMangas)
+                        }
+                    }
                 }
 
-                self.activeDiscoveryToken = nil
-                self.isLoadingDiscovery = false
+                await MainActor.run {
+                    guard generation == self.discoveryGeneration else { return }
+                    self.activeDiscoveryToken = nil
+                    self.isLoadingDiscovery = false
+                }
             }
         }
     }
@@ -436,13 +307,9 @@ final class SearchViewModel: ObservableObject {
         discoveryGeneration += 1
         genreGeneration += 1
         popularMangas = []
-        popularSourcePositions = [:]
-        popularStableOrder = []
         discoveryGenres = []
         selectedGenre = nil
         genreMangas = []
-        genreSourcePositions = [:]
-        genreStableOrder = []
         isLoadingDiscovery = false
         isLoadingGenre = false
         refreshSourceAvailability()
@@ -468,68 +335,91 @@ final class SearchViewModel: ObservableObject {
 
         selectedGenre = genre
         genreMangas = []
-        genreSourcePositions = [:]
-        genreStableOrder = []
         isLoadingGenre = true
 
+        Task { [weak self] in
+            await self?.processor.beginGenreSession(generation: generation)
+            self?.runGenreWork(
+                generation: generation,
+                genre: genre,
+                cancellationToken: cancellationToken,
+                useCase: useCase
+            )
+        }
+    }
+
+    private func runGenreWork(
+        generation: Int,
+        genre: SourceDiscoveryGenre,
+        cancellationToken: RequestCancellationToken,
+        useCase: SearchMangaUseCase
+    ) {
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result {
                 try useCase.manga(
                     forGenreID: genre.id,
                     cancellationToken: cancellationToken
                 ) { progress in
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self,
-                              generation == self.genreGeneration,
+                    Task { [weak self] in
+                        guard let self else { return }
+
+                        // Merging and stabilizing both happen inside the
+                        // actor's session state, so concurrent progress
+                        // updates from different sources never race on the
+                        // same underlying arrays.
+                        guard let stabilized = await self.processor.ingestGenreProgress(
+                            generation: generation,
+                            incoming: progress.mangas,
+                            progressSourceID: progress.sourceID,
+                            limit: 24
+                        ) else {
+                            return
+                        }
+
+                        await MainActor.run {
+                            guard generation == self.genreGeneration,
+                                  self.selectedGenre?.id == genre.id
+                            else {
+                                return
+                            }
+
+                            self.genreMangas = stabilized.mangas
+                        }
+                    }
+                }
+            }
+
+            Task { [weak self] in
+                guard let self else { return }
+
+                if case .success(let mangas) = result,
+                   let stabilized = await self.processor.finalizeGenreSession(
+                    generation: generation,
+                    mangas: mangas,
+                    limit: 24
+                   ) {
+                    await MainActor.run {
+                        guard generation == self.genreGeneration,
                               self.selectedGenre?.id == genre.id
                         else {
                             return
                         }
 
-                        self.genreSourcePositions = Self.mergingSourcePositions(
-                            current: self.genreSourcePositions,
-                            mangas: progress.mangas,
-                            progressSourceID: progress.sourceID
-                        )
-                        let merged = self.mergingSearchResults(
-                            current: self.genreMangas,
-                            incoming: progress.mangas
-                        )
-                        let stabilized = self.stabilizedDiscoveryMangas(
-                            from: merged,
-                            limit: 24,
-                            sourcePositions: self.genreSourcePositions,
-                            previousOrder: self.genreStableOrder,
-                            settle: false
-                        )
                         self.genreMangas = stabilized.mangas
-                        self.genreStableOrder = stabilized.order
+                        self.logDiscoveryRanking(kind: "GENRE:\(genre.id)", mangas: self.genreMangas)
                     }
                 }
-            }
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self,
-                      generation == self.genreGeneration,
-                      self.selectedGenre?.id == genre.id
-                else {
-                    return
-                }
+                await MainActor.run {
+                    guard generation == self.genreGeneration,
+                          self.selectedGenre?.id == genre.id
+                    else {
+                        return
+                    }
 
-                if case .success(let mangas) = result {
-                    let stabilized = self.stabilizedDiscoveryMangas(
-                        from: mangas,
-                        limit: 24,
-                        sourcePositions: self.genreSourcePositions,
-                        previousOrder: self.genreStableOrder,
-                        settle: true
-                    )
-                    self.genreMangas = stabilized.mangas
-                    self.genreStableOrder = stabilized.order
-                    self.logDiscoveryRanking(kind: "GENRE:\(genre.id)", mangas: self.genreMangas)
+                    self.activeGenreToken = nil
+                    self.isLoadingGenre = false
                 }
-                self.activeGenreToken = nil
-                self.isLoadingGenre = false
             }
         }
     }
@@ -564,8 +454,10 @@ final class SearchViewModel: ObservableObject {
         let generation = searchGeneration
         let useCase = searchMangaUseCase
 
-        invalidateSearchPresentation()
         results = []
+        readableGroups = []
+        allGroups = []
+        catalogOnlyGroups = []
         searchSourcePositions = [:]
         stableSearchGroupOrder = []
         completedSourceCount = 0
@@ -574,6 +466,23 @@ final class SearchViewModel: ObservableObject {
         hasSearched = true
         errorMessage = nil
 
+        Task { [weak self] in
+            await self?.processor.beginSearchSession(generation: generation)
+            self?.runSearchWork(
+                generation: generation,
+                currentQuery: currentQuery,
+                cancellationToken: cancellationToken,
+                useCase: useCase
+            )
+        }
+    }
+
+    private func runSearchWork(
+        generation: Int,
+        currentQuery: String,
+        cancellationToken: RequestCancellationToken,
+        useCase: SearchMangaUseCase
+    ) {
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result {
                 try useCase.execute(
@@ -585,15 +494,21 @@ final class SearchViewModel: ObservableObject {
                     Task { [weak self] in
                         guard let self else { return }
 
-                        let processed = await self.processor.process(
-                            current: self.results,
+                        // The actor owns the canonical merged results for this
+                        // session, so every progress update — even several
+                        // arriving in a tight burst as many sources finish at
+                        // once — is merged one at a time, in order, with no
+                        // chance of two updates racing on the same Array.
+                        guard let groupsResult = await self.processor.ingestSearchProgress(
+                            generation: generation,
                             incoming: progress.mangas,
-                            currentPositions: self.searchSourcePositions,
-                            progressSourceID: progress.sourceID
-                        )
+                            progressSourceID: progress.sourceID,
+                            query: currentQuery
+                        ) else {
+                            return
+                        }
 
                         await MainActor.run {
-
                             guard generation == self.searchGeneration,
                                   !cancellationToken.isCancelled
                             else {
@@ -603,16 +518,12 @@ final class SearchViewModel: ObservableObject {
                             self.completedSourceCount = progress.completedSourceCount
                             self.totalSourceCount = progress.totalSourceCount
 
-                            self.invalidateSearchPresentation()
-
-                            self.results = processed.mangas
-                            self.searchSourcePositions = processed.sourcePositions
-
-                            // Temporalmente dejamos esto.
-                            self.reconcileSearchOrder(
-                                query: currentQuery,
-                                settle: false
-                            )
+                            self.results = groupsResult.mangas
+                            self.searchSourcePositions = groupsResult.sourcePositions
+                            self.stableSearchGroupOrder = groupsResult.stableOrder
+                            self.readableGroups = groupsResult.readableGroups
+                            self.allGroups = groupsResult.allGroups
+                            self.catalogOnlyGroups = groupsResult.catalogOnlyGroups
                         }
                     }
                 }
@@ -628,11 +539,30 @@ final class SearchViewModel: ObservableObject {
 
                 switch result {
                 case .success(let mangas):
-                    self.invalidateSearchPresentation()
-                    self.results = mangas
-                    self.reconcileSearchOrder(query: currentQuery, settle: true)
                     self.errorMessage = nil
-                    self.logSearchRanking(query: currentQuery)
+
+                    Task { [weak self] in
+                        guard let self,
+                              let groupsResult = await self.processor.finalizeSearchSession(
+                                generation: generation,
+                                mangas: mangas,
+                                query: currentQuery
+                              )
+                        else {
+                            return
+                        }
+
+                        await MainActor.run {
+                            guard generation == self.searchGeneration else { return }
+                            self.results = groupsResult.mangas
+                            self.searchSourcePositions = groupsResult.sourcePositions
+                            self.stableSearchGroupOrder = groupsResult.stableOrder
+                            self.readableGroups = groupsResult.readableGroups
+                            self.allGroups = groupsResult.allGroups
+                            self.catalogOnlyGroups = groupsResult.catalogOnlyGroups
+                            self.logSearchRanking(query: currentQuery)
+                        }
+                    }
                 case .failure(let error):
                     if let clientError = error as? HTTPClientError, clientError.isCancellation {
                         return
@@ -658,39 +588,16 @@ final class SearchViewModel: ObservableObject {
 
     func reset() {
         cancelSearch()
-        invalidateSearchPresentation()
         results = []
+        readableGroups = []
+        allGroups = []
+        catalogOnlyGroups = []
         searchSourcePositions = [:]
         stableSearchGroupOrder = []
         completedSourceCount = 0
         totalSourceCount = 0
         errorMessage = nil
         hasSearched = false
-    }
-
-    private func mergingSearchResults(current: [Manga], incoming: [Manga]) -> [Manga] {
-        var bestByKey: [String: Manga] = [:]
-
-        for manga in current + incoming {
-            let key = "\(manga.sourceID)|\(manga.id)"
-
-            guard let existing = bestByKey[key] else {
-                bestByKey[key] = manga
-                continue
-            }
-
-            if searchResultRank(for: manga) > searchResultRank(for: existing) {
-                bestByKey[key] = manga
-            }
-        }
-
-        return bestByKey.values.sorted {
-            if $0.crossSourceTitleKey != $1.crossSourceTitleKey {
-                return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
-            }
-
-            return searchResultRank(for: $0) > searchResultRank(for: $1)
-        }
     }
 
     private func discoveryMangas(
@@ -702,64 +609,6 @@ final class SearchViewModel: ObservableObject {
             mangas: mangas.filter { !$0.hasBadSearchTitle },
             sourcePositions: sourcePositions,
             limit: limit
-        )
-    }
-
-    private func stabilizedDiscoveryMangas(
-        from mangas: [Manga],
-        limit: Int,
-        sourcePositions: [String: Int],
-        previousOrder: [String],
-        settle: Bool
-    ) -> (mangas: [Manga], order: [String]) {
-        let filtered = mangas.filter { !$0.hasBadSearchTitle }
-        let clusters = MangaIdentityResolver.clusters(from: filtered)
-        let ranked = DiscoveryRanker.rank(
-            mangas: filtered,
-            sourcePositions: sourcePositions,
-            limit: limit
-        )
-
-        var representativeByID: [String: Manga] = [:]
-        var scores: [String: Double] = [:]
-
-        for cluster in clusters {
-            guard let representative = DiscoveryRanker.rank(
-                mangas: cluster,
-                sourcePositions: sourcePositions,
-                limit: 1
-            ).first else {
-                continue
-            }
-
-            let key = MangaIdentityResolver.clusterKey(for: cluster)
-            representativeByID[key] = representative
-            scores[key] = DiscoveryRanker.score(
-                for: cluster,
-                sourcePositions: sourcePositions
-            )
-        }
-
-        let rankedIDs = ranked.map { manga -> String in
-            let cluster = clusters.first { $0.contains { MangaIdentityResolver.sameWork($0, manga) } } ?? [manga]
-            let key = MangaIdentityResolver.clusterKey(for: cluster)
-            representativeByID[key] = manga
-            return key
-        }
-
-        let order = StableRankingReconciler.reconcile(
-            previous: previousOrder,
-            rankedIDs: rankedIDs,
-            scores: scores,
-            dominantIDs: [],
-            minimumPromotionDelta: 0.004,
-            relativePromotionDelta: 0.18,
-            settle: settle
-        )
-
-        return (
-            order.compactMap { representativeByID[$0] },
-            order
         )
     }
 
@@ -788,7 +637,7 @@ final class SearchViewModel: ObservableObject {
 
     private func logSearchRanking(query: String) {
         #if DEBUG
-        let top = groupedMangas(from: results)
+        let top = readableGroups
             .prefix(5)
             .map { group in
                 let score = SearchResultRanker.groupScore(
@@ -1381,24 +1230,383 @@ struct SearchSourceFilter: Identifiable, Equatable {
 /// dedup/ranking work doesn't block the UI while results stream in from
 /// multiple sources concurrently.
 private actor SearchProcessor {
-    struct ProcessedSearchResults {
+    struct SearchGroupsResult {
         let mangas: [Manga]
         let sourcePositions: [String: Int]
+        let readableGroups: [MangaSearchGroup]
+        let allGroups: [MangaSearchGroup]
+        let catalogOnlyGroups: [MangaSearchGroup]
+        let stableOrder: [String]
     }
 
-    func process(
-        current: [Manga],
+    struct StabilizedDiscoveryResult {
+        let mangas: [Manga]
+        let order: [String]
+    }
+
+    // Every field below is only ever touched from inside this actor, so the
+    // actor's own serial execution is what makes read-modify-write safe.
+    //
+    // Previously, each progressive search/discovery update spawned its own
+    // Task that read `self.results` (a plain, non-isolated property on the
+    // view model) directly, did some async work, and only later wrote the
+    // merged value back on the main actor. With many sources finishing in a
+    // tight burst, multiple of those Tasks were in flight at once, all
+    // reading/merging/writing the same Array concurrently with no
+    // synchronization between them — a real data race on Swift's Array
+    // storage, and a plausible cause of the crash (lost updates at best,
+    // memory corruption at worst). Keeping the canonical current state here,
+    // behind the actor, means every ingest is processed one at a time in
+    // order, with no possibility of two updates stepping on each other.
+    private var searchGeneration = 0
+    private var searchMangas: [Manga] = []
+    private var searchPositions: [String: Int] = [:]
+    private var searchStableOrder: [String] = []
+
+    private var discoveryGeneration = 0
+    private var discoveryMangas: [Manga] = []
+    private var discoveryPositions: [String: Int] = [:]
+    private var discoveryStableOrder: [String] = []
+
+    private var genreGeneration = 0
+    private var genreMangas: [Manga] = []
+    private var genrePositions: [String: Int] = [:]
+    private var genreStableOrder: [String] = []
+
+    // MARK: - Search
+
+    func beginSearchSession(generation: Int) {
+        searchGeneration = generation
+        searchMangas = []
+        searchPositions = [:]
+        searchStableOrder = []
+    }
+
+    /// Merges one source's results into the session state and rebuilds the
+    /// display groups. Returns nil if `generation` is no longer the active
+    /// session (a newer search started, or this one was cancelled) so the
+    /// caller can simply discard a stale update instead of publishing it.
+    func ingestSearchProgress(
+        generation: Int,
         incoming: [Manga],
-        currentPositions: [String: Int],
-        progressSourceID: String
-    ) -> ProcessedSearchResults {
-        ProcessedSearchResults(
-            mangas: Self.mergingSearchResults(current: current, incoming: incoming),
-            sourcePositions: Self.mergingSourcePositions(
-                current: currentPositions,
-                mangas: incoming,
-                progressSourceID: progressSourceID
+        progressSourceID: String,
+        query: String
+    ) -> SearchGroupsResult? {
+        guard generation == searchGeneration else { return nil }
+
+        searchMangas = Self.mergingSearchResults(current: searchMangas, incoming: incoming)
+        searchPositions = Self.mergingSourcePositions(
+            current: searchPositions,
+            mangas: incoming,
+            progressSourceID: progressSourceID
+        )
+
+        let groups = Self.buildGroups(
+            from: searchMangas,
+            query: query,
+            sourcePositions: searchPositions,
+            previousOrder: searchStableOrder,
+            settle: false
+        )
+        searchStableOrder = groups.stableOrder
+
+        return SearchGroupsResult(
+            mangas: searchMangas,
+            sourcePositions: searchPositions,
+            readableGroups: groups.readableGroups,
+            allGroups: groups.allGroups,
+            catalogOnlyGroups: groups.catalogOnlyGroups,
+            stableOrder: groups.stableOrder
+        )
+    }
+
+    /// Final settle pass once the whole (possibly-cached) search result is in.
+    func finalizeSearchSession(
+        generation: Int,
+        mangas: [Manga],
+        query: String
+    ) -> SearchGroupsResult? {
+        guard generation == searchGeneration else { return nil }
+
+        searchMangas = mangas
+        let groups = Self.buildGroups(
+            from: searchMangas,
+            query: query,
+            sourcePositions: searchPositions,
+            previousOrder: searchStableOrder,
+            settle: true
+        )
+        searchStableOrder = groups.stableOrder
+
+        return SearchGroupsResult(
+            mangas: searchMangas,
+            sourcePositions: searchPositions,
+            readableGroups: groups.readableGroups,
+            allGroups: groups.allGroups,
+            catalogOnlyGroups: groups.catalogOnlyGroups,
+            stableOrder: groups.stableOrder
+        )
+    }
+
+    // MARK: - Discovery (Popular)
+
+    func beginDiscoverySession(generation: Int) {
+        discoveryGeneration = generation
+        discoveryMangas = []
+        discoveryPositions = [:]
+        discoveryStableOrder = []
+    }
+
+    func ingestDiscoveryProgress(
+        generation: Int,
+        incoming: [Manga],
+        progressSourceID: String,
+        limit: Int
+    ) -> StabilizedDiscoveryResult? {
+        guard generation == discoveryGeneration else { return nil }
+
+        discoveryMangas = Self.mergingSearchResults(current: discoveryMangas, incoming: incoming)
+        discoveryPositions = Self.mergingSourcePositions(
+            current: discoveryPositions,
+            mangas: incoming,
+            progressSourceID: progressSourceID
+        )
+
+        let stabilized = Self.stabilizedDiscovery(
+            from: discoveryMangas,
+            limit: limit,
+            sourcePositions: discoveryPositions,
+            previousOrder: discoveryStableOrder,
+            settle: false
+        )
+        discoveryStableOrder = stabilized.order
+        return stabilized
+    }
+
+    func finalizeDiscoverySession(
+        generation: Int,
+        mangas: [Manga],
+        limit: Int
+    ) -> StabilizedDiscoveryResult? {
+        guard generation == discoveryGeneration else { return nil }
+
+        let stabilized = Self.stabilizedDiscovery(
+            from: mangas,
+            limit: limit,
+            sourcePositions: discoveryPositions,
+            previousOrder: discoveryStableOrder,
+            settle: true
+        )
+        discoveryStableOrder = stabilized.order
+        return stabilized
+    }
+
+    // MARK: - Genre
+
+    func beginGenreSession(generation: Int) {
+        genreGeneration = generation
+        genreMangas = []
+        genrePositions = [:]
+        genreStableOrder = []
+    }
+
+    func ingestGenreProgress(
+        generation: Int,
+        incoming: [Manga],
+        progressSourceID: String,
+        limit: Int
+    ) -> StabilizedDiscoveryResult? {
+        guard generation == genreGeneration else { return nil }
+
+        genreMangas = Self.mergingSearchResults(current: genreMangas, incoming: incoming)
+        genrePositions = Self.mergingSourcePositions(
+            current: genrePositions,
+            mangas: incoming,
+            progressSourceID: progressSourceID
+        )
+
+        let stabilized = Self.stabilizedDiscovery(
+            from: genreMangas,
+            limit: limit,
+            sourcePositions: genrePositions,
+            previousOrder: genreStableOrder,
+            settle: false
+        )
+        genreStableOrder = stabilized.order
+        return stabilized
+    }
+
+    func finalizeGenreSession(
+        generation: Int,
+        mangas: [Manga],
+        limit: Int
+    ) -> StabilizedDiscoveryResult? {
+        guard generation == genreGeneration else { return nil }
+
+        let stabilized = Self.stabilizedDiscovery(
+            from: mangas,
+            limit: limit,
+            sourcePositions: genrePositions,
+            previousOrder: genreStableOrder,
+            settle: true
+        )
+        genreStableOrder = stabilized.order
+        return stabilized
+    }
+
+    // MARK: - Pure helpers (no actor state; safe to call from anywhere in the file)
+
+    // Clustering identical titles across sources (MangaIdentityResolver.clusters)
+    // compares every result against every existing cluster, so its cost grows
+    // with the size of `results`. This used to run — more than once, for the
+    // readable list, the catalog-only list, and again just to compute a
+    // stable order — synchronously on the main thread every time a source
+    // finished responding *and* every time SwiftUI re-rendered the search
+    // screen. As more sources returned results the app spent increasing
+    // amounts of main-thread time reclustering the same ever-growing list
+    // from scratch — feeling like the whole screen froze while "loading
+    // other sources". Clustering once here, off the main actor, and handing
+    // the view pre-built group lists means the main thread never reclusters.
+    private static func buildGroups(
+        from mangas: [Manga],
+        query: String,
+        sourcePositions: [String: Int],
+        previousOrder: [String],
+        settle: Bool
+    ) -> (readableGroups: [MangaSearchGroup], allGroups: [MangaSearchGroup], catalogOnlyGroups: [MangaSearchGroup], stableOrder: [String]) {
+        let clusters = MangaIdentityResolver.clusters(from: mangas.filter { !$0.hasBadSearchTitle })
+
+        var readableGroups: [MangaSearchGroup] = []
+        var allGroups: [MangaSearchGroup] = []
+        var catalogOnlyGroups: [MangaSearchGroup] = []
+
+        for cluster in clusters {
+            let ranked = cluster.sorted { searchResultRank(for: $0) > searchResultRank(for: $1) }
+            let key = MangaIdentityResolver.clusterKey(for: ranked)
+            allGroups.append(MangaSearchGroup(id: key, mangas: ranked))
+
+            let readableMembers = ranked.filter { NativeSourceCatalog.supportsReading(sourceID: $0.sourceID) }
+            if readableMembers.isEmpty {
+                catalogOnlyGroups.append(MangaSearchGroup(id: key, mangas: ranked))
+            } else {
+                readableGroups.append(MangaSearchGroup(id: key, mangas: readableMembers))
+            }
+        }
+
+        let activeQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        func queryOrdered(_ groups: [MangaSearchGroup]) -> [MangaSearchGroup] {
+            guard !activeQuery.isEmpty else {
+                return groups.sorted {
+                    $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+            }
+
+            return groups.sorted { lhs, rhs in
+                let lhsScore = SearchResultRanker.groupScore(query: activeQuery, mangas: lhs.mangas, sourcePositions: sourcePositions)
+                let rhsScore = SearchResultRanker.groupScore(query: activeQuery, mangas: rhs.mangas, sourcePositions: sourcePositions)
+                if abs(lhsScore - rhsScore) > 0.0001 { return lhsScore > rhsScore }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+        }
+
+        let orderedReadable = queryOrdered(readableGroups)
+        let orderedAll = queryOrdered(allGroups)
+        let orderedCatalog = queryOrdered(catalogOnlyGroups)
+
+        let scores = Dictionary(
+            uniqueKeysWithValues: orderedReadable.map { group in
+                (group.id, SearchResultRanker.groupScore(query: activeQuery, mangas: group.mangas, sourcePositions: sourcePositions))
+            }
+        )
+        let dominantIDs = Set(scores.compactMap { entry in entry.value >= 9_000 ? entry.key : nil })
+
+        let stableOrder = StableRankingReconciler.reconcile(
+            previous: previousOrder,
+            rankedIDs: orderedReadable.map(\.id),
+            scores: scores,
+            dominantIDs: dominantIDs,
+            minimumPromotionDelta: 450,
+            relativePromotionDelta: 0.04,
+            settle: settle
+        )
+
+        func stableOrdered(_ groups: [MangaSearchGroup]) -> [MangaSearchGroup] {
+            guard !stableOrder.isEmpty else { return groups }
+            let stablePositions = Dictionary(uniqueKeysWithValues: stableOrder.enumerated().map { ($0.element, $0.offset) })
+            let rankedPositions = Dictionary(uniqueKeysWithValues: groups.enumerated().map { ($0.element.id, $0.offset) })
+
+            return groups.sorted { lhs, rhs in
+                let lhsPosition = stablePositions[lhs.id] ?? rankedPositions[lhs.id] ?? Int.max
+                let rhsPosition = stablePositions[rhs.id] ?? rankedPositions[rhs.id] ?? Int.max
+                if lhsPosition != rhsPosition { return lhsPosition < rhsPosition }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+        }
+
+        return (
+            readableGroups: stableOrdered(orderedReadable),
+            allGroups: stableOrdered(orderedAll),
+            catalogOnlyGroups: stableOrdered(orderedCatalog),
+            stableOrder: stableOrder
+        )
+    }
+
+    private static func stabilizedDiscovery(
+        from mangas: [Manga],
+        limit: Int,
+        sourcePositions: [String: Int],
+        previousOrder: [String],
+        settle: Bool
+    ) -> StabilizedDiscoveryResult {
+        let filtered = mangas.filter { !$0.hasBadSearchTitle }
+        let clusters = MangaIdentityResolver.clusters(from: filtered)
+        let ranked = DiscoveryRanker.rank(
+            mangas: filtered,
+            sourcePositions: sourcePositions,
+            limit: limit
+        )
+
+        var representativeByID: [String: Manga] = [:]
+        var scores: [String: Double] = [:]
+
+        for cluster in clusters {
+            guard let representative = DiscoveryRanker.rank(
+                mangas: cluster,
+                sourcePositions: sourcePositions,
+                limit: 1
+            ).first else {
+                continue
+            }
+
+            let key = MangaIdentityResolver.clusterKey(for: cluster)
+            representativeByID[key] = representative
+            scores[key] = DiscoveryRanker.score(
+                for: cluster,
+                sourcePositions: sourcePositions
             )
+        }
+
+        let rankedIDs = ranked.map { manga -> String in
+            let cluster = clusters.first { $0.contains { MangaIdentityResolver.sameWork($0, manga) } } ?? [manga]
+            let key = MangaIdentityResolver.clusterKey(for: cluster)
+            representativeByID[key] = manga
+            return key
+        }
+
+        let order = StableRankingReconciler.reconcile(
+            previous: previousOrder,
+            rankedIDs: rankedIDs,
+            scores: scores,
+            dominantIDs: [],
+            minimumPromotionDelta: 0.004,
+            relativePromotionDelta: 0.18,
+            settle: settle
+        )
+
+        return StabilizedDiscoveryResult(
+            mangas: order.compactMap { representativeByID[$0] },
+            order: order
         )
     }
 

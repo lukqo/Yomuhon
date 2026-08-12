@@ -427,7 +427,7 @@ struct SearchView: View {
     ) -> some View {
         VStack(spacing: YomuhonSpacing.medium) {
             Image(systemName: icon)
-                .font(.system(size: 42, weight: .light))
+                .font(.system(size: YomuhonIconSize.emptyState, weight: .light))
                 .foregroundColor(theme.textSecondary.opacity(0.5))
 
             Text(title)
@@ -778,7 +778,7 @@ private struct SearchResultBookRow: View {
                     HStack(spacing: 4) {
                         if badge.isBest {
                             Image(systemName: "star.fill")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(size: YomuhonIconSize.inlineBadge, weight: .semibold))
                         }
 
                         Text(badge.displayTitle)

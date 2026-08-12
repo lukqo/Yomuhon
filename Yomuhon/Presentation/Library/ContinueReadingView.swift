@@ -111,7 +111,7 @@ struct ContinueReadingView: View {
     private var emptyState: some View {
         VStack(spacing: YomuhonSpacing.medium) {
             Image(systemName: "clock")
-                .font(.system(size: 46, weight: .light))
+                .font(.system(size: YomuhonIconSize.emptyState, weight: .light))
                 .foregroundColor(theme.textSecondary.opacity(0.42))
 
             Text("continue.empty.title")
@@ -283,7 +283,7 @@ private struct ToggleIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: YomuhonIconSize.toolbarButton, weight: .semibold))
                 .foregroundColor(isSelected ? theme.background : theme.textPrimary)
                 .frame(width: 36, height: 36)
                 .background(isSelected ? theme.textPrimary : theme.secondaryBackground.opacity(0.72))

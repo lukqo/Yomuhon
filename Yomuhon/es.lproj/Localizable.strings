@@ -502,3 +502,35 @@
 "detail.language.checkingTitle" = "Comprobando idioma de capítulos";
 "detail.language.noChaptersTitle" = "No hay capítulos en este idioma";
 "reader.nextChapter.offlineUnavailable" = "Estás sin conexión y el siguiente capítulo no está descargado.";
+
+// MARK: - Catálogo por fuente (navegación individual)
+"sourceCatalog.subtitle" = "Explora lo que ofrece esta fuente por sí sola.";
+"sourceCatalog.search.placeholder" = "Buscar en esta fuente";
+"sourceCatalog.loading" = "Cargando catálogo…";
+"sourceCatalog.unavailable.title" = "Fuente no disponible";
+"sourceCatalog.unavailable.message" = "No se pudo conectar con esta fuente ahora mismo. Inténtalo más tarde.";
+"sourceCatalog.popular.title" = "Populares aquí";
+"sourceCatalog.catalog.title" = "Catálogo";
+"sourceCatalog.popular.empty.title" = "Todavía no hay nada que mostrar";
+"sourceCatalog.popular.empty.message" = "Esta fuente no devolvió títulos populares.";
+"sourceCatalog.popular.failed.title" = "No se pudo cargar el catálogo";
+"sourceCatalog.popular.failed.message" = "No se pudo conectar con esta fuente en este momento. Revisá tu conexión e intentá de nuevo.";
+"sourceCatalog.popular.endOfResults" = "No hay más resultados";
+"sourceCatalog.retry" = "Reintentar";
+"sourceCatalog.searchOnly.title" = "Solo búsqueda";
+"sourceCatalog.searchOnly.message" = "Esta fuente no permite explorar por género ni populares. Usa el buscador de arriba.";
+"sourceCatalog.genres.title" = "Géneros";
+"sourceCatalog.genres.subtitle" = "Toca uno o varios géneros que te gusten para filtrar el catálogo de esta fuente.";
+"sourceCatalog.types.title" = "Tipo";
+"sourceCatalog.types.subtitle" = "Toca uno o varios tipos que ofrezca esta fuente para filtrar su catálogo.";
+"sourceCatalog.types.all" = "Todos";
+"sourceCatalog.fullCatalog.title" = "Catálogo completo";
+"sourceCatalog.genreResults.title" = "Coinciden con estos géneros";
+"sourceCatalog.genreResults.empty.title" = "No se encontraron títulos";
+"sourceCatalog.genreResults.empty.message" = "Ningún título coincide con los géneros seleccionados en esta fuente.";
+"sourceCatalog.filterResults.title" = "Resultados filtrados";
+"sourceCatalog.filterResults.empty.title" = "No se encontraron títulos";
+"sourceCatalog.filterResults.empty.message" = "Ningún título coincide con los géneros o tipos seleccionados en esta fuente.";
+"sourceCatalog.searchResults.title" = "Resultados";
+"sourceCatalog.search.error" = "Ocurrió un problema al buscar en esta fuente.";
+"sourceCatalog.search.error.title" = "Falló la búsqueda";

@@ -7,6 +7,7 @@ import SwiftUI
 
 struct RegularRootView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject var searchViewModel: SearchViewModel
     let compositionRoot: PresentationCompositionRoot
     @ObservedObject var navigationModel: AppNavigationModel
 
@@ -64,7 +65,7 @@ struct RegularRootView: View {
     private var brand: some View {
         HStack(spacing: YomuhonSpacing.small) {
             Image(systemName: "books.vertical.fill")
-                .font(.system(size: 19, weight: .semibold))
+                .font(.system(size: YomuhonIconSize.row, weight: .semibold))
                 .frame(width: 28, height: 28)
 
             Text("Yomuhon")
@@ -90,7 +91,7 @@ struct RegularRootView: View {
             }
 
             Text("library.collections")
-                .font(.system(size: 10, weight: .semibold))
+                .font(YomuhonTypography.caption2Semibold)
                 .foregroundColor(theme.textSecondary.opacity(0.68))
                 .textCase(.uppercase)
                 .padding(.horizontal, YomuhonSpacing.small)
@@ -192,6 +193,8 @@ struct RegularRootView: View {
                 MangaDetailRouteTitle(viewModel: viewModel)
             case .sources:
                 Text(NSLocalizedString("sources.title", comment: ""))
+            case .sourceCatalog(let catalogViewModel):
+                Text(catalogViewModel.displayName)
             }
         } else {
             Text(navigationModel.selectedSection.title)
@@ -229,7 +232,7 @@ struct RegularRootView: View {
 
         case .search:
             SearchView(
-                viewModel: compositionRoot.makeSearchViewModel(),
+                viewModel: searchViewModel,
                 compositionRoot: compositionRoot,
                 onOpenMangaDetail: { detailViewModel in
                     withAnimation(theme.animation) {
@@ -276,7 +279,27 @@ struct RegularRootView: View {
             .id(ObjectIdentifier(detailViewModel))
 
         case .sources(let sourcesViewModel):
-            SourcesView(viewModel: sourcesViewModel)
+            SourcesView(
+                viewModel: sourcesViewModel,
+                onOpenSourceCatalog: { item in
+                    withAnimation(theme.animation) {
+                        navigationModel.openSourceCatalog(
+                            compositionRoot.makeSourceCatalogViewModel(sourceID: item.id, sourceName: item.title)
+                        )
+                    }
+                }
+            )
+
+        case .sourceCatalog(let catalogViewModel):
+            SourceCatalogView(
+                viewModel: catalogViewModel,
+                compositionRoot: compositionRoot,
+                onOpenMangaDetail: { detailViewModel in
+                    withAnimation(theme.animation) {
+                        navigationModel.openMangaDetail(detailViewModel)
+                    }
+                }
+            )
         }
     }
 }
@@ -332,7 +355,7 @@ private struct SidebarButton: View {
         Button(action: action) {
             HStack(spacing: YomuhonSpacing.medium) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 15, weight: .regular))
+                    .font(.system(size: YomuhonIconSize.sidebarRow, weight: .regular))
                     .frame(width: 22)
 
                 Text(title)
@@ -342,7 +365,7 @@ private struct SidebarButton: View {
 
                 if let badgeText {
                     Text(badgeText)
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .font(YomuhonTypography.badge)
                         .foregroundColor(isSelected ? theme.textPrimary : theme.textSecondary)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)

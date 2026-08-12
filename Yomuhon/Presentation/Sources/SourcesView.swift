@@ -7,10 +7,15 @@ import SwiftUI
 
 struct SourcesView: View {
     @StateObject private var viewModel: SourcesViewModel
+    private let onOpenSourceCatalog: ((SourceRepositoryRowItem) -> Void)?
     @Environment(\.yomuhonTheme) private var theme
 
-    init(viewModel: SourcesViewModel) {
+    init(
+        viewModel: SourcesViewModel,
+        onOpenSourceCatalog: ((SourceRepositoryRowItem) -> Void)? = nil
+    ) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.onOpenSourceCatalog = onOpenSourceCatalog
     }
 
     var body: some View {
@@ -58,7 +63,7 @@ struct SourcesView: View {
     private var availabilityCard: some View {
         HStack(alignment: .center, spacing: YomuhonSpacing.large) {
             Image(systemName: viewModel.healthAutomationState == .checking ? "arrow.triangle.2.circlepath" : "books.vertical.fill")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: YomuhonIconSize.prominent, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 48, height: 48)
                 .background(theme.secondaryBackground.opacity(0.72))
@@ -106,7 +111,7 @@ struct SourcesView: View {
         VStack(alignment: .leading, spacing: YomuhonSpacing.medium) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("sources.product.list.title")
-                    .font(.title2.weight(.semibold))
+                    .font(YomuhonTypography.title2)
                     .foregroundColor(theme.textPrimary)
 
                 Text("sources.product.list.subtitle")
@@ -125,7 +130,14 @@ struct SourcesView: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.repositoryItems) { item in
-                        SourceAvailabilityRow(item: item)
+                        Button {
+                            onOpenSourceCatalog?(item)
+                        } label: {
+                            SourceAvailabilityRow(item: item, showsDisclosure: onOpenSourceCatalog != nil)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(onOpenSourceCatalog == nil)
+                        .accessibilityIdentifier("sources.catalog.\(item.id)")
 
                         if item.id != viewModel.repositoryItems.last?.id {
                             Rectangle()
@@ -183,12 +195,13 @@ struct SourcesView: View {
 
 private struct SourceAvailabilityRow: View {
     let item: SourceRepositoryRowItem
+    var showsDisclosure: Bool = false
     @Environment(\.yomuhonTheme) private var theme
 
     var body: some View {
         HStack(spacing: YomuhonSpacing.medium) {
             Image(systemName: item.isOperational ? "books.vertical.fill" : "books.vertical")
-                .font(.system(size: 19, weight: .semibold))
+                .font(.system(size: YomuhonIconSize.row, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 44, height: 44)
                 .background(theme.secondaryBackground.opacity(0.72))
@@ -227,6 +240,13 @@ private struct SourceAvailabilityRow: View {
             .foregroundColor(theme.textSecondary)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(item.statusTitle)
+
+            if showsDisclosure {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: YomuhonIconSize.disclosure, weight: .semibold))
+                    .foregroundColor(theme.textSecondary.opacity(0.6))
+                    .padding(.leading, YomuhonSpacing.small)
+            }
         }
         .padding(YomuhonSpacing.medium)
         .contentShape(Rectangle())

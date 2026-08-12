@@ -130,6 +130,7 @@ final class MangaDetailViewModel: ObservableObject {
     private var detailSessionDeadline: Date?
     private var detailSessionAttemptedSourceIDs = Set<String>()
     private var initialDetailLoadRequestedSourceIDs = Set<String>()
+    private var hasAttemptedAlternateSourceDiscovery = false
     private let detailLoadTimeout: TimeInterval
     private let detailSessionTimeout: TimeInterval
     private let maximumAutomaticSourceAttempts: Int
@@ -433,6 +434,8 @@ final class MangaDetailViewModel: ObservableObject {
     }
 
     func loadDetailsIfNeeded() {
+        discoverAlternateSourcesIfNeeded()
+
         let sourceID = manga.sourceID
 
         guard manga.chapters.isEmpty else {
@@ -1362,6 +1365,71 @@ final class MangaDetailViewModel: ObservableObject {
             availableMangas[index] = candidate
         } else {
             availableMangas.append(candidate)
+        }
+    }
+
+    /// Best-effort discovery of this title on other sources, run once when
+    /// the detail screen opens with only one known candidate. That happens
+    /// whenever a title is opened from Search's Discover/Popular/Genre
+    /// posters, which (unlike the search results list) don't carry
+    /// clustered same-work candidates from other sources. Without this,
+    /// "where to read" and the language switcher had nothing else to offer
+    /// until the user tapped a language, which then had to search live —
+    /// and often looked like the source was stuck, since a live search can
+    /// fail for reasons (title mismatch, a slow source, network hiccups)
+    /// that have nothing to do with whether the title truly exists
+    /// elsewhere. Doing this discovery up front makes both consistent with
+    /// what you get from the search results list.
+    private func discoverAlternateSourcesIfNeeded() {
+        guard !hasAttemptedAlternateSourceDiscovery, availableMangas.count <= 1 else {
+            return
+        }
+
+        hasAttemptedAlternateSourceDiscovery = true
+
+        let currentManga = manga
+        let repository = sourceRepository
+        let cancellationToken = RequestCancellationToken()
+
+        DispatchQueue.global(qos: .utility).async {
+            var seenResultIDs = Set<String>()
+            var discovered: [Manga] = []
+
+            for query in Self.languageSearchQueries(for: currentManga) {
+                if cancellationToken.isCancelled { break }
+
+                let queryResults: [Manga]
+                if let progressiveRepository = repository as? ProgressiveSourceRepository {
+                    queryResults = (try? progressiveRepository.searchManga(
+                        query: query,
+                        cancellationToken: cancellationToken,
+                        progress: { _ in }
+                    )) ?? []
+                } else {
+                    queryResults = (try? repository.searchManga(query: query)) ?? []
+                }
+
+                for candidate in queryResults where candidate.sourceID != currentManga.sourceID {
+                    let key = "\(candidate.sourceID)|\(candidate.id)"
+                    guard seenResultIDs.insert(key).inserted else { continue }
+
+                    if MangaIdentityResolver.sameWork(currentManga, candidate) {
+                        discovered.append(candidate)
+                    }
+                }
+            }
+
+            guard !discovered.isEmpty else { return }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !cancellationToken.isCancelled, self.manga.id == currentManga.id else {
+                    return
+                }
+
+                for candidate in discovered {
+                    self.mergeLanguageCandidate(candidate)
+                }
+            }
         }
     }
 

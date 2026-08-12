@@ -43,8 +43,17 @@ struct DeclarativeSourceRuntime: Source {
             SourceDiscoveryGenre(id: $0.id, title: $0.title)
         }
     }
+    var supportsTypeDiscovery: Bool {
+        config.supports.supportsTypes && config.discover?.types != nil
+    }
+    var discoveryTypes: [SourceDiscoveryType] {
+        guard supportsTypeDiscovery else { return [] }
+        return (config.discover?.types?.items ?? []).map {
+            SourceDiscoveryType(id: $0.id, title: $0.title)
+        }
+    }
 
-    init(config: DeclarativeSourceConfig, httpClient: HTTPClient = HTTPClient(timeout: 10, maximumRetryCount: 0)) {
+    init(config: DeclarativeSourceConfig, httpClient: HTTPClient = HTTPClient(timeout: 15, maximumRetryCount: 2)) {
         self.config = config
         self.dataLoader = { request in
             try httpClient.data(for: request)
@@ -88,6 +97,43 @@ struct DeclarativeSourceRuntime: Source {
         return mangas
     }
 
+    /// Fetches exactly one page of the popular shelf (1-based). Returns an
+    /// empty array once `page` goes past what the source declares in
+    /// `route.pagination.maxPages` — the caller reads that as "no more
+    /// pages" rather than "genuinely empty", since page 1 already succeeded.
+    func popularManga(page: Int) throws -> [Manga] {
+        guard supportsPopularDiscovery, page >= 1 else { return [] }
+
+        if config.engineMode(for: .popular) == .jsonAPI {
+            // JSON-API discovery isn't offset-paginated today (unlike
+            // chapters, which do support offset/limit) — only page 1 exists.
+            guard page == 1 else { return [] }
+            guard let operation = config.discover?.popular?.api else {
+                throw DeclarativeSourceError.missingRoute("discover.popular.api")
+            }
+            return try JSONAPISourceExecutor(config: config, dataLoader: dataLoader)
+                .list(operation: operation, variables: [:])
+        }
+
+        let explicit = config.discover?.popular
+        guard let route = explicit?.route ?? config.routes.popular else {
+            throw DeclarativeSourceError.missingRoute("popular")
+        }
+        guard let selector = explicit?.selector ?? config.selectors.popular else {
+            throw DeclarativeSourceError.missingSelector("popular")
+        }
+        guard page <= declaredMaxPages(route), let url = singlePageURL(route: route, variables: [:], logicalPage: page) else {
+            return []
+        }
+
+        let mangas = try parseMangaList(pageURLs: [url], selector: selector, stage: "POPULAR page=\(page)")
+        SourceDebugTrace.log(
+            "Runtime",
+            "source=\(id) POPULAR page=\(page) html count=\(mangas.count) covers=\(mangas.filter { $0.coverURL != nil }.count)"
+        )
+        return mangas
+    }
+
     func manga(forGenreID genreID: String) throws -> [Manga] {
         guard supportsGenreDiscovery,
               let genres = config.discover?.genres,
@@ -120,6 +166,42 @@ struct DeclarativeSourceRuntime: Source {
         SourceDebugTrace.log(
             "Runtime",
             "source=\(id) GENRE id=\(genreID) html count=\(mangas.count) covers=\(mangas.filter { $0.coverURL != nil }.count)"
+        )
+        return mangas
+    }
+
+    func manga(forTypeID typeID: String) throws -> [Manga] {
+        guard supportsTypeDiscovery,
+              let types = config.discover?.types,
+              let item = types.items.first(where: { $0.id == typeID })
+        else {
+            return []
+        }
+
+        let variables = ["type": item.value]
+        if config.engineMode(for: .types) == .jsonAPI {
+            guard let operation = types.operation.api else {
+                throw DeclarativeSourceError.missingRoute("discover.types.operation.api")
+            }
+            return try JSONAPISourceExecutor(config: config, dataLoader: dataLoader)
+                .list(operation: operation, variables: variables)
+        }
+
+        guard let route = types.operation.route else {
+            throw DeclarativeSourceError.missingRoute("discover.types.operation.route")
+        }
+        guard let selector = types.operation.selector else {
+            throw DeclarativeSourceError.missingSelector("discover.types.operation.selector")
+        }
+        let mangas = try parseMangaList(
+            route: route,
+            selector: selector,
+            variables: variables,
+            stage: "TYPE id=\(typeID)"
+        )
+        SourceDebugTrace.log(
+            "Runtime",
+            "source=\(id) TYPE id=\(typeID) html count=\(mangas.count) covers=\(mangas.filter { $0.coverURL != nil }.count)"
         )
         return mangas
     }
@@ -311,10 +393,18 @@ struct DeclarativeSourceRuntime: Source {
         variables: [String: String],
         stage: String
     ) throws -> [Manga] {
+        try parseMangaList(pageURLs: routeURLs(route: route, variables: variables), selector: selector, stage: stage)
+    }
+
+    private func parseMangaList(
+        pageURLs: [URL],
+        selector: DeclarativeListSelector,
+        stage: String
+    ) throws -> [Manga] {
         var mangaByURL: [String: Manga] = [:]
         var orderedKeys: [String] = []
 
-        for url in routeURLs(route: route, variables: variables) {
+        for url in pageURLs {
             let document = try fetchDocument(at: url)
             let scopedDocument = scopedListDocument(document, selector: selector)
             let selectedItems = scopedDocument.select(selector.container)
@@ -576,14 +666,22 @@ struct DeclarativeSourceRuntime: Source {
             output.append(chapter)
         }
 
-        let ascending = output.sorted { lhs, rhs in
+        let deduped: [Chapter]
+        if selector.dedupeByNumber == true {
+            var seenNumbers = Set<Double>()
+            deduped = output.filter { seenNumbers.insert($0.number).inserted }
+        } else {
+            deduped = output
+        }
+
+        let ascending = deduped.sorted { lhs, rhs in
             if lhs.number != rhs.number { return lhs.number < rhs.number }
             return lhs.id < rhs.id
         }
 
         SourceDebugTrace.log(
             "Parser",
-            "source=\(id) CHAPTER_RESULT accepted=\(ascending.count) rejectedNumberRule=\(rejectedByNumberRule) sample=\(ascending.prefix(3).map { $0.number })"
+            "source=\(id) CHAPTER_RESULT accepted=\(ascending.count) rejectedNumberRule=\(rejectedByNumberRule) dedupedByNumber=\(output.count - deduped.count) sample=\(ascending.prefix(3).map { $0.number })"
         )
 
         if selector.sort == "numberDescending" {
@@ -599,11 +697,15 @@ struct DeclarativeSourceRuntime: Source {
             .split(separator: "/")
             .last
             .map(String.init) ?? ""
+
         let value = url.absoluteString.lowercased()
 
         return last.yomuhonIsChapterPathComponent
             || value.contains("/chapters/")
             || value.contains("/chapter/")
+            || value.contains("/viewer/")
+            || value.contains("/view_uploads/")
+            || value.contains("/read/")
             || title.yomuhonLooksLikeChapterTitle
     }
 
@@ -893,10 +995,24 @@ struct DeclarativeSourceRuntime: Source {
 
     private func routeURLs(route: DeclarativeRoute, variables: [String: String]) -> [URL] {
         let start = route.pagination?.start ?? 1
-        let maxPages = min(max(route.pagination?.maxPages ?? 1, 1), 5)
+        let maxPages = declaredMaxPages(route)
         return (start..<(start + maxPages)).compactMap { page in
             routeURL(route: route, variables: variables, page: page)
         }
+    }
+
+    /// A source's declared page count, capped the same way `routeURLs`
+    /// caps its own upfront fetch — these scraped sites don't have a real
+    /// infinite catalog, so we never ask for more than they claim to have.
+    private func declaredMaxPages(_ route: DeclarativeRoute) -> Int {
+        min(max(route.pagination?.maxPages ?? 1, 1), 5)
+    }
+
+    /// Maps a 1-based logical page (what the ViewModel counts) to the site's
+    /// own page numbering, which may start at 0 or 1 per `route.pagination.start`.
+    private func singlePageURL(route: DeclarativeRoute, variables: [String: String], logicalPage: Int) -> URL? {
+        let start = route.pagination?.start ?? 1
+        return routeURL(route: route, variables: variables, page: start + logicalPage - 1)
     }
 
     private func routeURL(route: DeclarativeRoute, variables: [String: String], page: Int) -> URL? {

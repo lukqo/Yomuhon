@@ -894,7 +894,7 @@ struct DownloadsView: View {
     private func emptyState(width: CGFloat) -> some View {
         VStack(spacing: YomuhonSpacing.medium) {
             Image(systemName: "arrow.down.circle")
-                .font(.system(size: 48, weight: .light))
+                .font(.system(size: YomuhonIconSize.emptyState, weight: .light))
                 .foregroundColor(theme.textSecondary.opacity(0.42))
 
             Text("downloads.empty.title")

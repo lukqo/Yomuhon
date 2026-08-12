@@ -79,6 +79,16 @@ struct SourceRepositoryImpl: ProgressiveSourceRepository, ProgressiveDiscoveryRe
             .map { DeclarativeSourceRuntime(config: $0) }
     }
 
+    // TODO(types-per-source): this fuses genres by normalized id across every
+    // enabled source into one global list for Search, which contradicts the
+    // per-source-declared, non-fused model we now use for both genres and
+    // types in SourceCatalogView/ViewModel (see DeclarativeSourceRuntime and
+    // SourceCatalogUseCase). Two sources that use different ids for the same
+    // real-world genre don't merge here (e.g. "manga" vs "manhua_manga"), and
+    // two sources that use the same id for different things incorrectly do
+    // merge. Left as-is for now — flagged so Search's global genre filter can
+    // be revisited to stop fusing across sources, matching the catalog-scoped
+    // approach.
     func availableDiscoveryGenres() -> [SourceDiscoveryGenre] {
         let compatibleSources = availableSources().filter { $0.supportsGenreDiscovery }
         var bestByID: [String: SourceDiscoveryGenre] = [:]

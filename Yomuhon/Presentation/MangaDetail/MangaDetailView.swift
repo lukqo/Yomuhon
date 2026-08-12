@@ -232,7 +232,7 @@ struct MangaDetailView: View {
                 Image(systemName: viewModel.isDownloading || viewModel.isDownloadingManga ? "arrow.down.circle.fill" : "arrow.down.circle")
                 Text("detail.downloadMenu")
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: YomuhonIconSize.disclosure, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
             }
             .font(YomuhonTypography.calloutMedium)

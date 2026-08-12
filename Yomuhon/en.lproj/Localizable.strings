@@ -501,3 +501,35 @@
 "detail.language.checkingTitle" = "Checking chapter language";
 "detail.language.noChaptersTitle" = "No chapters in this language";
 "reader.nextChapter.offlineUnavailable" = "You're offline and the next chapter isn't downloaded.";
+
+// MARK: - Source Catalog (per-source browsing)
+"sourceCatalog.subtitle" = "Browse what this source offers, on its own.";
+"sourceCatalog.search.placeholder" = "Search this source";
+"sourceCatalog.loading" = "Loading catalog…";
+"sourceCatalog.unavailable.title" = "Source unavailable";
+"sourceCatalog.unavailable.message" = "This source couldn't be reached right now. Try again later.";
+"sourceCatalog.popular.title" = "Popular here";
+"sourceCatalog.catalog.title" = "Catalog";
+"sourceCatalog.popular.empty.title" = "Nothing to show yet";
+"sourceCatalog.popular.empty.message" = "This source didn't return any popular titles.";
+"sourceCatalog.popular.failed.title" = "Couldn't load the catalog";
+"sourceCatalog.popular.failed.message" = "This source couldn't be reached right now. Check your connection and try again.";
+"sourceCatalog.popular.endOfResults" = "No more results";
+"sourceCatalog.retry" = "Retry";
+"sourceCatalog.searchOnly.title" = "Search only";
+"sourceCatalog.searchOnly.message" = "This source doesn't support browsing by genre or popularity. Use the search field above.";
+"sourceCatalog.genres.title" = "Genres";
+"sourceCatalog.genres.subtitle" = "Tap one or more genres you like to filter this source's catalog.";
+"sourceCatalog.types.title" = "Type";
+"sourceCatalog.types.subtitle" = "Tap one or more types this source offers to filter its catalog.";
+"sourceCatalog.types.all" = "All";
+"sourceCatalog.fullCatalog.title" = "Full catalog";
+"sourceCatalog.genreResults.title" = "Matching genres";
+"sourceCatalog.genreResults.empty.title" = "No titles found";
+"sourceCatalog.genreResults.empty.message" = "No titles matched the selected genres on this source.";
+"sourceCatalog.filterResults.title" = "Filtered results";
+"sourceCatalog.filterResults.empty.title" = "No titles found";
+"sourceCatalog.filterResults.empty.message" = "No titles matched the selected genres or types on this source.";
+"sourceCatalog.searchResults.title" = "Results";
+"sourceCatalog.search.error" = "Something went wrong searching this source.";
+"sourceCatalog.search.error.title" = "Search failed";

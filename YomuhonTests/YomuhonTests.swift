@@ -1186,6 +1186,41 @@ final class YomuhonTests: XCTestCase {
         XCTAssertEqual(tableDocument.select("tr:has(.chapter)").count, 2)
     }
 
+    /// Regression test for the child (`>`) and sibling (`+` / `~`) combinators.
+    /// `#chapters-list > li.upload-link` is the exact chapter container pattern
+    /// used by the zonatmo source; before combinator support was added this
+    /// selector was rejected by `supports()` (failing catalog validation and
+    /// disabling the whole source) and matched nothing in `select()` even when
+    /// it wasn't rejected outright.
+    func testSimpleHTMLSelectorEngineSupportsChildAndSiblingCombinators() throws {
+        let html = #"""
+        <ul id="chapters-list">
+          <li class="upload-link"><a href="/view_uploads/1">Chapter 1</a></li>
+          <li class="upload-link"><a href="/view_uploads/2">Chapter 2</a></li>
+          <li class="ad-slot">
+            <li class="upload-link"><a href="/view_uploads/nested">Nested, should not match</a></li>
+          </li>
+        </ul>
+        <div id="siblings">
+          <span class="first">A</span>
+          <span class="second">B</span>
+          <span class="third">C</span>
+        </div>
+        """#
+        let document = SimpleHTMLDocument(html: html)
+
+        XCTAssertTrue(SimpleHTMLDocument.supports("#chapters-list > li.upload-link"))
+        // Only the two direct-child <li> elements should match, not the one
+        // nested a level deeper inside the ad-slot <li>.
+        XCTAssertEqual(document.select("#chapters-list > li.upload-link").count, 2)
+
+        XCTAssertTrue(SimpleHTMLDocument.supports(".first + .second"))
+        XCTAssertEqual(document.first(".first + .second")?.attr("class"), "second")
+
+        XCTAssertTrue(SimpleHTMLDocument.supports(".first ~ .third"))
+        XCTAssertEqual(document.select(".first ~ .third").count, 1)
+    }
+
     func testDeclarativeChapterNumberRuleRejectsCandidatesThatDoNotMatchDeclaredRegex() throws {
         let configJSON = #"""
         {
@@ -1238,6 +1273,75 @@ final class YomuhonTests: XCTestCase {
             title: "Demo",
             coverURL: nil,
             synopsis: "yomuhon-declarative-source-url:https://example.com/manga/demo.1",
+            chapters: []
+        )
+
+        let detailed = try source.fetchDetails(for: manga)
+
+        XCTAssertEqual(detailed.chapters.map(\.number), [1, 2])
+        XCTAssertEqual(detailed.chapters.count, 2)
+    }
+
+    func testDeclarativeDedupeByNumberCollapsesMultipleScanlationGroupUploadsOfTheSameChapter() throws {
+        // Reproduces the ZonaTMO-style page shape: the same chapter number is
+        // uploaded independently by several scanlation groups, each with its
+        // own distinct viewer URL. Without dedupeByNumber the reader would show
+        // three duplicate "Capítulo 1" rows.
+        let configJSON = #"""
+        {
+          "schemaVersion": 1,
+          "id": "multi_group_fixture",
+          "name": "Multi Group Fixture",
+          "version": 1,
+          "language": "es",
+          "baseURL": "https://example.com",
+          "engineMode": "html",
+          "enabledByDefault": false,
+          "experimental": true,
+          "allowedDomains": ["example.com"],
+          "supports": {
+            "search": false,
+            "popular": false,
+            "details": true,
+            "chapters": true,
+            "pages": false
+          },
+          "selectors": {
+            "details": {
+              "title": {"selectors": ["h1"], "attrs": ["text"]}
+            },
+            "chapters": {
+              "container": "li",
+              "title": {"attrs": ["text"]},
+              "url": {"selectors": ["a[href*='/viewer/']"], "attrs": ["href"], "required": true},
+              "number": {"from": "text", "regex": "Cap[ií]tulo\\s*([0-9]+(?:\\.[0-9]+)?)"},
+              "sort": "numberAscending",
+              "dedupeByNumber": true
+            }
+          }
+        }
+        """#
+        let config = try JSONDecoder().decode(
+            DeclarativeSourceConfig.self,
+            from: Data(configJSON.utf8)
+        )
+        let source = DeclarativeSourceRuntime(config: config) { _ in
+            Data(#"""
+            <h1>Demo</h1>
+            <ul>
+              <li>Grupo Alfa <a href="/viewer/1001">Capítulo 1</a></li>
+              <li>Grupo Beta <a href="/viewer/2001">Capítulo 1</a></li>
+              <li>Grupo Gamma <a href="/viewer/3001">Capítulo 1</a></li>
+              <li>Grupo Alfa <a href="/viewer/1002">Capítulo 2</a></li>
+            </ul>
+            """#.utf8)
+        }
+        let manga = Manga(
+            id: "multi-group-demo",
+            sourceID: "multi_group_fixture",
+            title: "Demo",
+            coverURL: nil,
+            synopsis: "yomuhon-declarative-source-url:https://example.com/manga/demo",
             chapters: []
         )
 
@@ -2003,6 +2107,78 @@ final class YomuhonTests: XCTestCase {
         XCTAssertEqual(source.discoveryGenres, [SourceDiscoveryGenre(id: "action", title: "Action")])
         XCTAssertEqual(mangas.map(\.title), ["Action Hero"])
         XCTAssertEqual(requestedURL?.path, "/genre/action/page/1")
+        XCTAssertNil(URLComponents(url: try XCTUnwrap(requestedURL), resolvingAgainstBaseURL: false)?.query)
+    }
+
+    func testDeclarativeTypeDiscoveryUsesDeclaredCategoryRouteInsteadOfSearch() throws {
+        let configJSON = #"""
+        {
+          "schemaVersion": 1,
+          "id": "type_fixture",
+          "name": "Type Fixture",
+          "version": 1,
+          "language": "en",
+          "baseURL": "https://example.com",
+          "engineMode": "html",
+          "enabledByDefault": false,
+          "experimental": true,
+          "allowedDomains": ["example.com"],
+          "supports": {
+            "search": false,
+            "popular": false,
+            "details": false,
+            "chapters": false,
+            "pages": false,
+            "types": true
+          },
+          "routes": {},
+          "selectors": {},
+          "discover": {
+            "types": {
+              "items": [
+                {"id": "novel", "title": "Novela Ligera", "value": "novel"}
+              ],
+              "operation": {
+                "route": {
+                  "path": "/type/{{type}}/page/{page}",
+                  "pagination": {"type": "path", "start": 1, "maxPages": 1}
+                },
+                "selector": {
+                  "container": "div#book_list div.item",
+                  "title": {"selectors": ["div.text h3 a"], "attrs": ["text"]},
+                  "url": {"selectors": ["div.text h3 a"], "attrs": ["href"], "required": true},
+                  "cover": {"selectors": ["img"], "attrs": ["src"]}
+                }
+              }
+            }
+          }
+        }
+        """#
+
+        let config = try JSONDecoder().decode(
+            DeclarativeSourceConfig.self,
+            from: Data(configJSON.utf8)
+        )
+        var requestedURL: URL?
+        let source = DeclarativeSourceRuntime(config: config) { request in
+            requestedURL = request.url
+            return Data(#"""
+            <html><body>
+              <div id="book_list">
+                <div class="item">
+                  <img src="/cover.jpg">
+                  <div class="text"><h3><a href="/novel/light-novel-hero.1">Light Novel Hero</a></h3></div>
+                </div>
+              </div>
+            </body></html>
+            """#.utf8)
+        }
+
+        let mangas = try source.manga(forTypeID: "novel")
+
+        XCTAssertEqual(source.discoveryTypes, [SourceDiscoveryType(id: "novel", title: "Novela Ligera")])
+        XCTAssertEqual(mangas.map(\.title), ["Light Novel Hero"])
+        XCTAssertEqual(requestedURL?.path, "/type/novel/page/1")
         XCTAssertNil(URLComponents(url: try XCTUnwrap(requestedURL), resolvingAgainstBaseURL: false)?.query)
     }
 

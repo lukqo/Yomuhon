@@ -5,6 +5,12 @@
 
 import SwiftUI
 import Foundation
+import ImageIO
+#if os(macOS)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
 struct CoverView: View {
     let title: String
@@ -70,7 +76,7 @@ struct CoverView: View {
 
             VStack(spacing: YomuhonSpacing.small) {
                 Image(systemName: "photo")
-                    .font(.system(size: 22, weight: .light))
+                    .font(.system(size: YomuhonIconSize.prominent, weight: .light))
                     .foregroundColor(theme.textSecondary.opacity(0.56))
 
                 Text("cover.noCover")
@@ -144,6 +150,30 @@ private struct RemoteCoverImageView<Placeholder: View>: View {
     }
 }
 
+#if os(macOS)
+private typealias PlatformImage = NSImage
+#elseif canImport(UIKit)
+private typealias PlatformImage = UIImage
+#endif
+
+/// NSCache requires reference-type values; this just boxes a decoded platform
+/// image so it can live in `RemoteCoverImageLoader.memoryCache`.
+private final class PlatformImageBox {
+    let platform: PlatformImage
+
+    init(_ platform: PlatformImage) {
+        self.platform = platform
+    }
+
+    var image: Image {
+        #if os(macOS)
+        Image(nsImage: platform)
+        #else
+        Image(uiImage: platform)
+        #endif
+    }
+}
+
 private final class RemoteCoverImageLoader: ObservableObject {
     @Published var image: Image?
     @Published var isLoading = false
@@ -158,6 +188,19 @@ private final class RemoteCoverImageLoader: ObservableObject {
         attributes: .concurrent
     )
 
+    // Covers are shown at small, fixed grid sizes across Library, Search,
+    // Discover and Downloads, but were previously decoded at the CDN's full
+    // resolution and re-decoded from disk on every SwiftUI identity change
+    // (tab switches, category filters, returning from detail). This memory
+    // cache avoids repeating that work for covers already decoded this
+    // session; `memoryCacheLimit` bounds it so scrolling through a large
+    // library can't grow it unbounded.
+    private static let memoryCache: NSCache<NSURL, PlatformImageBox> = {
+        let cache = NSCache<NSURL, PlatformImageBox>()
+        cache.countLimit = 400
+        return cache
+    }()
+
     private var task: URLSessionDataTask?
     private var currentURL: URL?
 
@@ -167,6 +210,13 @@ private final class RemoteCoverImageLoader: ObservableObject {
         }
 
         currentURL = url
+
+        if let cached = Self.memoryCache.object(forKey: url as NSURL) {
+            image = cached.image
+            isLoading = false
+            return
+        }
+
         image = nil
         isLoading = true
         task?.cancel()
@@ -180,7 +230,8 @@ private final class RemoteCoverImageLoader: ObservableObject {
                 }
 
                 if let cachedImage {
-                    self.image = cachedImage
+                    Self.memoryCache.setObject(PlatformImageBox(cachedImage.platform), forKey: url as NSURL)
+                    self.image = cachedImage.image
                     self.isLoading = false
                     return
                 }
@@ -215,10 +266,12 @@ private final class RemoteCoverImageLoader: ObservableObject {
 
         let startedAt = Date()
         task = URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
-            let loadedImage = data.flatMap(Self.platformImage(from:))
+            let decodedPlatformImage = data.flatMap { Self.downsampledPlatformImage(from: $0) }
+            let loadedImage = decodedPlatformImage.map { PlatformImageBox($0).image }
 
-            if loadedImage != nil, let data {
+            if let decodedPlatformImage, let data {
                 Self.cache(data: data, for: url)
+                Self.memoryCache.setObject(PlatformImageBox(decodedPlatformImage), forKey: url as NSURL)
             }
 
             if loadedImage == nil, !remainingReferers.isEmpty {
@@ -315,15 +368,16 @@ private final class RemoteCoverImageLoader: ObservableObject {
         return origin.hasSuffix("/") ? origin : origin + "/"
     }
 
-    private static func cachedImage(for url: URL) -> Image? {
+    private static func cachedImage(for url: URL) -> (image: Image, platform: PlatformImage)? {
         guard let fileURL = cacheFileURL(for: url),
               FileManager.default.fileExists(atPath: fileURL.path),
-              let data = try? Data(contentsOf: fileURL)
+              let data = try? Data(contentsOf: fileURL),
+              let platform = downsampledPlatformImage(from: data)
         else {
             return nil
         }
 
-        return platformImage(from: data)
+        return (PlatformImageBox(platform).image, platform)
     }
 
     private static func cache(data: Data, for url: URL) {
@@ -351,19 +405,31 @@ private final class RemoteCoverImageLoader: ObservableObject {
         return directory.appendingPathComponent(url.absoluteString.stableCacheFileName)
     }
 
-    private static func platformImage(from data: Data) -> Image? {
+    private static let maxCoverPixelSize: CGFloat = 640
+
+    private static func downsampledPlatformImage(
+        from data: Data,
+        maxPixelSize: CGFloat = maxCoverPixelSize
+    ) -> PlatformImage? {
+        let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
+            return nil
+        }
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
+            return nil
+        }
+
         #if os(macOS)
-        guard let image = NSImage(data: data) else {
-            return nil
-        }
-
-        return Image(nsImage: image)
+        return NSImage(cgImage: cgImage, size: .zero)
         #elseif canImport(UIKit)
-        guard let image = UIImage(data: data) else {
-            return nil
-        }
-
-        return Image(uiImage: image)
+        return UIImage(cgImage: cgImage)
         #else
         return nil
         #endif
@@ -388,4 +454,3 @@ private extension String {
         return sanitized.isEmpty ? UUID().uuidString : sanitized
     }
 }
-

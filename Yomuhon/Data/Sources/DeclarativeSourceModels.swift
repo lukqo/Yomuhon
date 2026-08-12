@@ -183,6 +183,7 @@ enum DeclarativeSourceOperation {
     case chapters
     case pages
     case genres
+    case types
 }
 
 struct DeclarativeOperationModes: Codable {
@@ -192,6 +193,7 @@ struct DeclarativeOperationModes: Codable {
     let chapters: DeclarativeEngineMode?
     let pages: DeclarativeEngineMode?
     let genres: DeclarativeEngineMode?
+    let types: DeclarativeEngineMode?
 
     func mode(for operation: DeclarativeSourceOperation) -> DeclarativeEngineMode? {
         switch operation {
@@ -201,6 +203,7 @@ struct DeclarativeOperationModes: Codable {
         case .chapters: return chapters
         case .pages: return pages
         case .genres: return genres
+        case .types: return types
         }
     }
 }
@@ -269,8 +272,10 @@ struct DeclarativeSourceSupports: Codable {
     let chapters: Bool
     let pages: Bool
     let genres: Bool?
+    let types: Bool?
 
     var supportsGenres: Bool { genres == true }
+    var supportsTypes: Bool { types == true }
 }
 
 struct DeclarativeNetworkConfig: Codable {
@@ -339,6 +344,13 @@ struct DeclarativeChapterSelector: Codable {
     let url: DeclarativeFieldSelector
     let number: DeclarativeNumberRule?
     let sort: String?
+    /// When true, keep only one chapter per declared `number`, discarding
+    /// later candidates that share it. Some sources (e.g. sites that show
+    /// every scanlation group's upload as a separate row) otherwise produce
+    /// several distinct URLs for the same chapter number, which the default
+    /// URL-based dedup does not catch. Defaults to false to preserve existing
+    /// source behavior.
+    let dedupeByNumber: Bool?
 }
 
 struct DeclarativePagesSelector: Codable {
@@ -404,6 +416,7 @@ struct DeclarativeImageFilters: Codable {
 struct DeclarativeDiscoverConfig: Codable {
     let popular: DeclarativeDiscoverOperation?
     let genres: DeclarativeGenreDiscovery?
+    let types: DeclarativeTypeDiscovery?
 }
 
 struct DeclarativeDiscoverOperation: Codable {
@@ -418,6 +431,22 @@ struct DeclarativeGenreDiscovery: Codable {
 }
 
 struct DeclarativeGenreItem: Codable {
+    let id: String
+    let title: String
+    let value: String
+}
+
+/// Mirrors `DeclarativeGenreDiscovery`/`DeclarativeGenreItem`. Each source
+/// declares its own content-type taxonomy (e.g. Manga/Manhwa/Novela) here
+/// instead of the app assuming a fixed, shared enum — a novel-only source
+/// simply omits `types`, and a source with its own distinct categories
+/// declares exactly those, with no mapping onto app-defined buckets.
+struct DeclarativeTypeDiscovery: Codable {
+    let items: [DeclarativeTypeItem]
+    let operation: DeclarativeDiscoverOperation
+}
+
+struct DeclarativeTypeItem: Codable {
     let id: String
     let title: String
     let value: String

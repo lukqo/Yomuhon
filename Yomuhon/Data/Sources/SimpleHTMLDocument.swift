@@ -49,6 +49,31 @@ private final class HTMLNode {
         return output
     }
 
+    var children: [HTMLNode] {
+        contents.compactMap { content -> HTMLNode? in
+            guard case .element(let child) = content else { return nil }
+            return child
+        }
+    }
+
+    /// The next element sibling, for the `+` adjacent-sibling combinator.
+    var nextElementSibling: HTMLNode? {
+        guard let parent, let index = parent.children.firstIndex(where: { $0 === self }) else {
+            return nil
+        }
+        let siblings = parent.children
+        return index + 1 < siblings.count ? siblings[index + 1] : nil
+    }
+
+    /// All later element siblings, for the `~` general-sibling combinator.
+    var followingElementSiblings: [HTMLNode] {
+        guard let parent, let index = parent.children.firstIndex(where: { $0 === self }) else {
+            return []
+        }
+        let siblings = parent.children
+        return index + 1 < siblings.count ? Array(siblings[(index + 1)...]) : []
+    }
+
     var textContent: String {
         contents.compactMap { content -> String? in
             switch content {
@@ -439,21 +464,22 @@ private final class CSSSimpleSelector {
 }
 
 private enum CSSSelectorEngine {
+    /// A combinator connects one compound selector to the next.
+    /// `descendant` is the implicit combinator represented by whitespace.
+    enum Combinator {
+        case descendant
+        case child
+        case adjacentSibling
+        case generalSibling
+    }
+
     static func supports(_ selector: String) -> Bool {
         let groups = split(selector, separator: ",")
         guard !groups.isEmpty else { return false }
 
         return groups.allSatisfy { group in
-            let withoutAttributes = removingAttributeSelectors(from: group)
-            guard !withoutAttributes.contains("+"),
-                  !withoutAttributes.contains("~"),
-                  !withoutAttributes.contains(">")
-            else {
-                return false
-            }
-
-            let tokens = splitByWhitespace(group)
-            return !tokens.isEmpty && tokens.allSatisfy { parseSimpleSelector($0) != nil }
+            guard let steps = tokenizeSteps(group) else { return false }
+            return steps.allSatisfy { parseSimpleSelector($0.selector) != nil }
         }
     }
 
@@ -489,23 +515,46 @@ private enum CSSSelectorEngine {
         var seen = Set<ObjectIdentifier>()
 
         for group in split(selector, separator: ",") {
-            let tokens = splitByWhitespace(group)
-            guard !tokens.isEmpty else { continue }
+            guard let steps = tokenizeSteps(group) else { continue }
 
-            let parsed = tokens.compactMap(parseSimpleSelector)
-            guard parsed.count == tokens.count else { continue }
+            let parsed = steps.compactMap { step -> (Combinator, CSSSimpleSelector)? in
+                guard let simple = parseSimpleSelector(step.selector) else { return nil }
+                return (step.combinator, simple)
+            }
+            guard parsed.count == steps.count else { continue }
 
             var scopes = [root]
-            for simpleSelector in parsed {
+            for (index, step) in parsed.enumerated() {
+                // The first compound selector in a group has no combinator
+                // before it; it's always evaluated against every descendant
+                // of the search root, same as before this combinator support
+                // was added.
+                let combinator = index == 0 ? .descendant : step.0
+                let simpleSelector = step.1
+
                 var matches: [HTMLNode] = []
                 var levelSeen = Set<ObjectIdentifier>()
 
+                func consider(_ candidate: HTMLNode) {
+                    guard simpleSelector.matches(candidate) else { return }
+                    let identifier = ObjectIdentifier(candidate)
+                    if levelSeen.insert(identifier).inserted {
+                        matches.append(candidate)
+                    }
+                }
+
                 for scope in scopes {
-                    for candidate in scope.descendants where simpleSelector.matches(candidate) {
-                        let identifier = ObjectIdentifier(candidate)
-                        if levelSeen.insert(identifier).inserted {
-                            matches.append(candidate)
+                    switch combinator {
+                    case .descendant:
+                        scope.descendants.forEach(consider)
+                    case .child:
+                        scope.children.forEach(consider)
+                    case .adjacentSibling:
+                        if let sibling = scope.nextElementSibling {
+                            consider(sibling)
                         }
+                    case .generalSibling:
+                        scope.followingElementSiblings.forEach(consider)
                     }
                 }
 
@@ -712,15 +761,24 @@ private enum CSSSelectorEngine {
         return output
     }
 
-    private static func splitByWhitespace(_ value: String) -> [String] {
-        var output: [String] = []
+    /// Splits a selector group (no top-level commas) into a sequence of
+    /// (combinator, compoundSelectorText) steps. Whitespace is the implicit
+    /// `descendant` combinator; `>`, `+`, and `~` are explicit combinators
+    /// that may additionally be surrounded by whitespace (`a > b` and `a>b`
+    /// both tokenize the same way).
+    private static func tokenizeSteps(_ value: String) -> [(combinator: Combinator, selector: String)]? {
+        var steps: [(Combinator, String)] = []
+        var pendingCombinator: Combinator = .descendant
         var current = ""
         var bracketDepth = 0
         var quote: Character?
 
         func flush() {
-            let value = current.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !value.isEmpty { output.append(value) }
+            let token = current.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !token.isEmpty {
+                steps.append((pendingCombinator, token))
+                pendingCombinator = .descendant
+            }
             current = ""
         }
 
@@ -740,7 +798,10 @@ private enum CSSSelectorEngine {
             } else if character == "]" {
                 bracketDepth = max(0, bracketDepth - 1)
                 current.append(character)
-            } else if character.isWhitespace, bracketDepth == 0 {
+            } else if bracketDepth == 0, character == ">" || character == "+" || character == "~" {
+                flush()
+                pendingCombinator = character == ">" ? .child : (character == "+" ? .adjacentSibling : .generalSibling)
+            } else if bracketDepth == 0, character.isWhitespace {
                 flush()
             } else {
                 current.append(character)
@@ -748,7 +809,7 @@ private enum CSSSelectorEngine {
         }
 
         flush()
-        return output
+        return steps.isEmpty ? nil : steps
     }
 
     private static func isSelectorNameCharacter(_ character: Character) -> Bool {

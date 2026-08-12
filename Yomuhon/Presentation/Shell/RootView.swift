@@ -81,6 +81,7 @@ enum AppSection: String, CaseIterable, Identifiable {
 enum AppRoute {
     case mangaDetail(MangaDetailViewModel)
     case sources(SourcesViewModel)
+    case sourceCatalog(SourceCatalogViewModel)
 }
 
 struct ReaderNavigationSession: Identifiable {
@@ -133,6 +134,10 @@ final class AppNavigationModel: ObservableObject {
 
     func openSources(_ viewModel: SourcesViewModel) {
         routeStack.append(.sources(viewModel))
+    }
+
+    func openSourceCatalog(_ viewModel: SourceCatalogViewModel) {
+        routeStack.append(.sourceCatalog(viewModel))
     }
 
     func goBack() {
@@ -193,6 +198,8 @@ final class AppNavigationModel: ObservableObject {
             return "detail"
         case .sources:
             return "sources"
+        case .sourceCatalog:
+            return "sourceCatalog"
         }
     }
 }
@@ -200,11 +207,13 @@ final class AppNavigationModel: ObservableObject {
 struct RootView: View {
     private let compositionRoot: PresentationCompositionRoot
     @StateObject private var libraryViewModel: LibraryViewModel
+    @StateObject private var searchViewModel: SearchViewModel
     @StateObject private var navigationModel: AppNavigationModel
 
     init(compositionRoot: PresentationCompositionRoot = .live) {
         self.compositionRoot = compositionRoot
         _libraryViewModel = StateObject(wrappedValue: compositionRoot.makeLibraryViewModel())
+        _searchViewModel = StateObject(wrappedValue: compositionRoot.makeSearchViewModel())
         _navigationModel = StateObject(wrappedValue: AppNavigationModel())
     }
 
@@ -262,6 +271,7 @@ struct RootView: View {
         case .regular:
             RegularRootView(
                 libraryViewModel: libraryViewModel,
+                searchViewModel: searchViewModel,
                 compositionRoot: compositionRoot,
                 navigationModel: navigationModel
             )
@@ -269,6 +279,7 @@ struct RootView: View {
         case .compact:
             CompactRootView(
                 libraryViewModel: libraryViewModel,
+                searchViewModel: searchViewModel,
                 compositionRoot: compositionRoot,
                 navigationModel: navigationModel
             )

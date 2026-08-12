@@ -197,13 +197,13 @@ struct LibraryView: View {
                     } label: {
                         HStack(spacing: 7) {
                             Image(systemName: category.iconName)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: YomuhonIconSize.chip, weight: .medium))
 
                             Text(category.title)
                                 .font(YomuhonTypography.captionMedium)
 
                             Text("\(viewModel.categoryCount(category))")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(YomuhonTypography.badge)
                                 .foregroundColor(
                                     viewModel.selectedCategory == category
                                         ? selectedPillTextColor.opacity(0.72)
@@ -358,7 +358,7 @@ struct LibraryView: View {
     private func emptyState(width: CGFloat) -> some View {
         VStack(spacing: YomuhonSpacing.large) {
             Image(systemName: isSearchingLibrary ? "magnifyingglass" : viewModel.selectedCategory.iconName)
-                .font(.system(size: 46, weight: .light))
+                .font(.system(size: YomuhonIconSize.emptyState, weight: .light))
                 .foregroundColor(theme.textSecondary.opacity(0.44))
 
             VStack(spacing: YomuhonSpacing.small) {
@@ -593,7 +593,7 @@ private struct LibraryCollectionSummaryCard: View {
 
     private var iconView: some View {
         Image(systemName: icon)
-            .font(.system(size: 26, weight: .medium))
+            .font(.system(size: YomuhonIconSize.stat, weight: .medium))
             .foregroundColor(theme.accent)
             .frame(width: 58, height: 58)
             .background(theme.secondaryBackground.opacity(0.82))
@@ -623,7 +623,7 @@ private struct LibraryCollectionSummaryCard: View {
     private func metric(value: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(value)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(YomuhonTypography.statValue)
                 .foregroundColor(theme.textPrimary)
 
             Text(label)
@@ -838,7 +838,7 @@ private struct LibraryPoster: View {
                 .overlay(alignment: .topTrailing) {
                     Button(role: .destructive, action: onDelete) {
                         Image(systemName: "trash")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: YomuhonIconSize.overlay, weight: .semibold))
                             .foregroundColor(Color.white.opacity(0.92))
                             .frame(width: 26, height: 26)
                             .background(Color.black.opacity(0.62))
@@ -851,7 +851,7 @@ private struct LibraryPoster: View {
                 .overlay(alignment: .bottomLeading) {
                     if let status {
                         Image(systemName: statusIcon(status))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: YomuhonIconSize.overlay, weight: .semibold))
                             .foregroundColor(Color.white.opacity(0.94))
                             .frame(width: 27, height: 27)
                             .background(Color.black.opacity(0.64))

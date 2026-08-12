@@ -91,7 +91,7 @@ private struct OnboardingCard: View {
                     .fill(theme.secondaryBackground)
                     .frame(width: 200, height: 240)
                 Image(systemName: step.systemImage)
-                    .font(.system(size: 64, weight: .light))
+                    .font(.system(size: YomuhonIconSize.hero, weight: .light))
                     .foregroundColor(theme.textPrimary.opacity(0.85))
             }
 

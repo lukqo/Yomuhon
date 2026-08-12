@@ -109,7 +109,7 @@ struct SettingsView: View {
                             Text(selectedCacheSizeTitle)
                                 .lineLimit(1)
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(size: YomuhonIconSize.disclosure, weight: .semibold))
                                 .opacity(0.68)
                         }
                         .font(YomuhonTypography.captionMedium)
@@ -245,7 +245,7 @@ struct SettingsView: View {
     ) -> some View {
         HStack(spacing: YomuhonSpacing.medium) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .regular))
+                .font(.system(size: YomuhonIconSize.compact, weight: .regular))
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 36, height: 36)
                 .background(theme.secondaryBackground.opacity(0.72))
@@ -409,7 +409,7 @@ private struct SettingsRow: View {
     var body: some View {
         HStack(spacing: YomuhonSpacing.medium) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .regular))
+                .font(.system(size: YomuhonIconSize.compact, weight: .regular))
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 36, height: 36)
                 .background(theme.secondaryBackground.opacity(0.72))

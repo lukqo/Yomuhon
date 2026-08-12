@@ -166,7 +166,7 @@ struct YomuhonLanguageBadge: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: isCompact ? 8.5 : 10, weight: .semibold))
+            .font(isCompact ? YomuhonTypography.badgeCompact : YomuhonTypography.badge)
             .foregroundColor(Color.white.opacity(0.94))
             .lineLimit(1)
             .padding(.horizontal, isCompact ? 5 : 7)

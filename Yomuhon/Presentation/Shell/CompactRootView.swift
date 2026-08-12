@@ -7,6 +7,7 @@ import SwiftUI
 
 struct CompactRootView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject var searchViewModel: SearchViewModel
     let compositionRoot: PresentationCompositionRoot
     @ObservedObject var navigationModel: AppNavigationModel
 
@@ -44,7 +45,7 @@ struct CompactRootView: View {
 
             NavigationView {
                 SearchView(
-                    viewModel: compositionRoot.makeSearchViewModel(),
+                    viewModel: searchViewModel,
                     compositionRoot: compositionRoot,
                     onOpenMangaDetail: { detailViewModel in
                         navigationModel.openMangaDetail(detailViewModel)
@@ -109,7 +110,7 @@ struct CompactRootView: View {
                 }
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: YomuhonIconSize.compact, weight: .semibold))
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
@@ -138,6 +139,8 @@ struct CompactRootView: View {
             MangaDetailRouteTitle(viewModel: viewModel)
         case .sources:
             Text(NSLocalizedString("sources.title", comment: ""))
+        case .sourceCatalog(let catalogViewModel):
+            Text(catalogViewModel.displayName)
         }
     }
 
@@ -156,7 +159,23 @@ struct CompactRootView: View {
             .id(ObjectIdentifier(detailViewModel))
 
         case .sources(let sourcesViewModel):
-            SourcesView(viewModel: sourcesViewModel)
+            SourcesView(
+                viewModel: sourcesViewModel,
+                onOpenSourceCatalog: { item in
+                    navigationModel.openSourceCatalog(
+                        compositionRoot.makeSourceCatalogViewModel(sourceID: item.id, sourceName: item.title)
+                    )
+                }
+            )
+
+        case .sourceCatalog(let catalogViewModel):
+            SourceCatalogView(
+                viewModel: catalogViewModel,
+                compositionRoot: compositionRoot,
+                onOpenMangaDetail: { detailViewModel in
+                    navigationModel.openMangaDetail(detailViewModel)
+                }
+            )
         }
     }
 }

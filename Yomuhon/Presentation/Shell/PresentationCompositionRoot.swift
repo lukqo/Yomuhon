@@ -66,6 +66,14 @@ struct PresentationCompositionRoot {
         SourcesViewModel(store: sourceSettingsStore)
     }
 
+    func makeSourceCatalogViewModel(sourceID: String, sourceName: String) -> SourceCatalogViewModel {
+        SourceCatalogViewModel(
+            sourceID: sourceID,
+            fallbackName: sourceName,
+            useCase: makeSourceCatalogUseCase()
+        )
+    }
+
     func makeMangaDetailViewModel(
         manga: Manga,
         alternativeMangas: [Manga] = [],
@@ -89,6 +97,10 @@ struct PresentationCompositionRoot {
 
     func makeSearchMangaUseCase() -> SearchMangaUseCase {
         SearchMangaUseCase(repository: sourceRepository)
+    }
+
+    func makeSourceCatalogUseCase() -> SourceCatalogUseCase {
+        SourceCatalogUseCase(repository: sourceRepository)
     }
 
     func makeGetChapterListUseCase() -> GetChapterListUseCase {

@@ -69,15 +69,73 @@ func safeOptionalDimension(_ value: CGFloat?) -> CGFloat? {
     return value
 }
 
+/// The app's single source of truth for text styles.
+///
+/// Every text-bearing view should reach for a token here rather than
+/// declaring `.font(.system(size:weight:))` inline. Using Apple's semantic
+/// text styles (`.title3`, `.callout`, `.caption2`, ...) as the base means
+/// every label in the app scales correctly with the user's Dynamic Type
+/// accessibility setting, which a hardcoded point size silently ignores.
 enum YomuhonTypography {
     static let largeTitle = Font.largeTitle.weight(.semibold)
     static let title = Font.title.weight(.semibold)
+    static let title2 = Font.title2.weight(.semibold)
+    static let title3 = Font.title3.weight(.semibold)
     static let headline = Font.headline.weight(.semibold)
     static let body = Font.body
-    static let caption = Font.caption
-    static let captionMedium = Font.caption.weight(.medium)
+    static let callout = Font.callout
     static let calloutMedium = Font.callout.weight(.medium)
     static let calloutSemibold = Font.callout.weight(.semibold)
+    static let subheadline = Font.subheadline
+    static let footnote = Font.footnote
+    static let footnoteSemibold = Font.footnote.weight(.semibold)
+    static let caption = Font.caption
+    static let captionMedium = Font.caption.weight(.medium)
+    static let captionSemibold = Font.caption.weight(.semibold)
+    static let caption2 = Font.caption2
+    static let caption2Semibold = Font.caption2.weight(.semibold)
+
+    /// Large rounded numerals, e.g. stat values on the library dashboard.
+    static let statValue = Font.system(.title2, design: .rounded).weight(.semibold)
+    /// Small rounded numeric badges (unread counts, pill labels).
+    static let badge = Font.system(size: 10, weight: .semibold, design: .rounded)
+    /// Same as `badge`, sized down for compact layouts.
+    static let badgeCompact = Font.system(size: 8.5, weight: .semibold, design: .rounded)
+}
+
+/// Centralized point sizes for SF Symbol icons rendered via `Image(systemName:).font(...)`.
+///
+/// Icons don't need Dynamic Type scaling, but they do need to stay
+/// consistent: before this, visually-identical elements (e.g. every empty
+/// state screen in the app) had each picked their own one-off size,
+/// so the same icon rendered at a different scale from one screen to the
+/// next. Routing every call site through these named constants keeps that
+/// from happening again.
+enum YomuhonIconSize {
+    /// Chevrons and other inline disclosure indicators.
+    static let disclosure: CGFloat = 12
+    /// Settings rows and compact navigation bar buttons.
+    static let compact: CGFloat = 16
+    /// Regular-width sidebar row icons.
+    static let sidebarRow: CGFloat = 15
+    /// Brand mark and list/source row leading icons.
+    static let row: CGFloat = 19
+    /// Prominent standalone icons (availability card, cover placeholder).
+    static let prominent: CGFloat = 22
+    /// Large stat glyphs.
+    static let stat: CGFloat = 26
+    /// Empty state illustrations, unified across every screen that shows one.
+    static let emptyState: CGFloat = 46
+    /// Onboarding hero icon.
+    static let hero: CGFloat = 64
+    /// Tiny inline icon inside a text badge (e.g. the "best source" star).
+    static let inlineBadge: CGFloat = 9
+    /// Filter/toolbar buttons sized within a 36x36 tap target.
+    static let toolbarButton: CGFloat = 14
+    /// Filter chip leading icons.
+    static let chip: CGFloat = 12
+    /// Small circular overlay buttons on cover art (delete, status).
+    static let overlay: CGFloat = 11
 }
 
 enum YomuhonMotion {
