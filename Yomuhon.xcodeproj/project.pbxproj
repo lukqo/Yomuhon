@@ -16,6 +16,9 @@
 		4904CCF72FF370610022F6B5 /* YomuhonUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4904CCF62FF370610022F6B5 /* YomuhonUITests.swift */; };
 		4904CCF92FF370610022F6B5 /* YomuhonUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4904CCF82FF370610022F6B5 /* YomuhonUITestsLaunchTests.swift */; };
 		969F4DA6A63BC9480C800984 /* MangaDetailNavigationTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0FA4022061BA1FE03DF4BED /* MangaDetailNavigationTrigger.swift */; };
+		A1B2C3012FF3900000010001 /* SourceCatalogUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3002FF3900000010001 /* SourceCatalogUseCase.swift */; };
+		A1B2C3032FF3900000010001 /* SourceCatalogViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3022FF3900000010001 /* SourceCatalogViewModel.swift */; };
+		A1B2C3052FF3900000010001 /* SourceCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3042FF3900000010001 /* SourceCatalogView.swift */; };
 		C0D300012FF37A0000010001 /* Manga.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301012FF37A0000010001 /* Manga.swift */; };
 		C0D300022FF37A0000010001 /* LibraryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301022FF37A0000010001 /* LibraryRepository.swift */; };
 		C0D300032FF37A0000010001 /* GetLibraryUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301032FF37A0000010001 /* GetLibraryUseCase.swift */; };
@@ -38,9 +41,6 @@
 		C0D300152FF37A0000010001 /* SearchMangaUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301152FF37A0000010001 /* SearchMangaUseCase.swift */; };
 		C0D300162FF37A0000010001 /* GetChapterListUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301162FF37A0000010001 /* GetChapterListUseCase.swift */; };
 		C0D300172FF37A0000010001 /* DownloadChapterUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301172FF37A0000010001 /* DownloadChapterUseCase.swift */; };
-		A1B2C3012FF3900000010001 /* SourceCatalogUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3002FF3900000010001 /* SourceCatalogUseCase.swift */; };
-		A1B2C3032FF3900000010001 /* SourceCatalogViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3022FF3900000010001 /* SourceCatalogViewModel.swift */; };
-		A1B2C3052FF3900000010001 /* SourceCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3042FF3900000010001 /* SourceCatalogView.swift */; };
 		C0D300182FF37A0000010001 /* UpdateReadingProgressUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301182FF37A0000010001 /* UpdateReadingProgressUseCase.swift */; };
 		C0D300192FF37A0000010001 /* SourceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D301192FF37A0000010001 /* SourceProtocol.swift */; };
 		C0D3001B2FF37A0000010001 /* SourceRepositoryImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D3011B2FF37A0000010001 /* SourceRepositoryImpl.swift */; };
@@ -103,6 +103,9 @@
 		4904CCF22FF370610022F6B5 /* YomuhonUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = YomuhonUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4904CCF62FF370610022F6B5 /* YomuhonUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YomuhonUITests.swift; sourceTree = "<group>"; };
 		4904CCF82FF370610022F6B5 /* YomuhonUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YomuhonUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		A1B2C3002FF3900000010001 /* SourceCatalogUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogUseCase.swift; sourceTree = "<group>"; };
+		A1B2C3022FF3900000010001 /* SourceCatalogViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogViewModel.swift; sourceTree = "<group>"; };
+		A1B2C3042FF3900000010001 /* SourceCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogView.swift; sourceTree = "<group>"; };
 		C0D301012FF37A0000010001 /* Manga.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Manga.swift; sourceTree = "<group>"; };
 		C0D301022FF37A0000010001 /* LibraryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRepository.swift; sourceTree = "<group>"; };
 		C0D301032FF37A0000010001 /* GetLibraryUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetLibraryUseCase.swift; sourceTree = "<group>"; };
@@ -125,9 +128,6 @@
 		C0D301152FF37A0000010001 /* SearchMangaUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchMangaUseCase.swift; sourceTree = "<group>"; };
 		C0D301162FF37A0000010001 /* GetChapterListUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetChapterListUseCase.swift; sourceTree = "<group>"; };
 		C0D301172FF37A0000010001 /* DownloadChapterUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadChapterUseCase.swift; sourceTree = "<group>"; };
-		A1B2C3002FF3900000010001 /* SourceCatalogUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogUseCase.swift; sourceTree = "<group>"; };
-		A1B2C3022FF3900000010001 /* SourceCatalogViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogViewModel.swift; sourceTree = "<group>"; };
-		A1B2C3042FF3900000010001 /* SourceCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCatalogView.swift; sourceTree = "<group>"; };
 		C0D301182FF37A0000010001 /* UpdateReadingProgressUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateReadingProgressUseCase.swift; sourceTree = "<group>"; };
 		C0D301192FF37A0000010001 /* SourceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceProtocol.swift; sourceTree = "<group>"; };
 		C0D3011B2FF37A0000010001 /* SourceRepositoryImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceRepositoryImpl.swift; sourceTree = "<group>"; };
@@ -416,15 +416,6 @@
 			path = "iOS-iPadOS";
 			sourceTree = "<group>";
 		};
-		C0D302142FF37A0000010001 /* Sources */ = {
-			isa = PBXGroup;
-			children = (
-				C0D301212FF37A0000010001 /* SourcesView.swift */,
-				C0D301202FF37A0000010001 /* SourcesViewModel.swift */,
-			);
-			path = Sources;
-			sourceTree = "<group>";
-		};
 		A1B2C3062FF3900000010001 /* SourceCatalog */ = {
 			isa = PBXGroup;
 			children = (
@@ -432,6 +423,15 @@
 				A1B2C3042FF3900000010001 /* SourceCatalogView.swift */,
 			);
 			path = SourceCatalog;
+			sourceTree = "<group>";
+		};
+		C0D302142FF37A0000010001 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				C0D301212FF37A0000010001 /* SourcesView.swift */,
+				C0D301202FF37A0000010001 /* SourcesViewModel.swift */,
+			);
+			path = Sources;
 			sourceTree = "<group>";
 		};
 		C0D400072FF3A00000010001 /* Settings */ = {
@@ -858,7 +858,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Yomuhon/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = ZBWQ696B5Q;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -897,7 +897,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Yomuhon/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = ZBWQ696B5Q;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
